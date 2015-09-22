@@ -31,6 +31,14 @@ int main(void){
         if(input[ln] == '\n'){
             input[ln] = '\0';
         }
+    
+        if(strcmp("exit", input) != 0 &&
+           strcmp("pwd", input) != 0 &&
+           strcmp("cd", input) != 0)
+        {
+            system(input);
+        }
+
     }
 
     exit(0);
