@@ -26,9 +26,46 @@ void trimEndingNewline(char *line){
 		line[length-1] = '\0';
 }
 
+void trimExtraWhitespace(char *line){
+
+	int length = strlen(line);
+	int j = 0;
+	int i = 0;
+	char *newline = (char*) malloc( length );
+
+	for(i = 0; i<length; i++){
+		if( !(line[i] == ' ' && (
+				(i == 0)           ||	// space at start
+				(i == length-1)    ||	// space at end
+				(line[i+1] == ' ') ||	// space followed by space
+				(j == 0) 				// first character of the new string
+			))
+		){
+			newline[j] = line[i];
+			j++;
+		}
+	}
+
+	strcpy(line, newline);
+
+}
+
 void parseCommands(char *line, char *commands){
 	//char *argument = "hello there";
 	//memcpy(commands, argument, 11);
+
+	const char semicol[2] = ";";
+	char *token;
+
+	token = strtok(line, semicol);
+
+	while(token != NULL){
+
+		printf("%s\n", token);
+
+		token = strtok(NULL, semicol);
+	}
+
 }
 
 int main(void){
@@ -57,10 +94,11 @@ int main(void){
 
 		// cut newline off and replace with null
 		trimEndingNewline(input);
+		trimExtraWhitespace(input);
 
 		parseCommands(input, &commandArray[0][0][0]);
 
-		printf("%s", commandArray[0][0]);
+		printf("%s\n", commandArray[0][0]);
 
 		if(strcmp("exit", input) == 0)
 			break;
