@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 #define MAXCOMMANDS 100
 #define MAXARGS 1000
@@ -51,44 +55,63 @@ void trimExtraWhitespace(char *line){
 	strcpy(line, newline);
 
 }
-int * parseCommands(char *line, char *commands){
-	//char *argument = "hello there";
-	//memcpy(commands, argument, 11);
 
-	const char delim[3] = ";&";
+int parseCommand(char *command, char **args){
+
 	const char space[2] = " ";
-	char *command, *argument;
-	int commandnum = 0;
 	int argnum = 0;
-	static int commargs[ MAXCOMMANDS ];
+	char *argument, *argumentPointer;
 
-	memset(commargs, -1, MAXCOMMANDS);
+	argument = strtok_r(command, space, &argumentPointer);
+	while(argument != NULL){
+		args[argnum] = argument;
+		argument = strtok_r(NULL, space, &argumentPointer);
+		argnum++;
+	}
+	return argnum;
+}
 
-	char *commandPointer, *argumentPointer;
+int splitCommands(char *line, char **commands){
+	const char delim[3] = ";&";
 
-	char *commandCopy = (char*) malloc( MAXINPUT );
+	char *commandPointer;
+	char *command;
+	int commandnum = 0;
 
 	command = strtok_r(line, delim, &commandPointer);
 	while(command != NULL){
 		trimExtraWhitespace(command);
-
-		strcpy(commandCopy, command);
-
-		argument = strtok_r(commandCopy, space, &argumentPointer);
-		while(argument != NULL){
-			//memcpy(commands + ((commandnum * MAXCOMMANDS) + (argnum * MAXARGS)), argument, strlen(argument));
-			strcpy(commands + ((commandnum * MAXARGS * MAXARGLENGTH) + (argnum * MAXARGLENGTH)), argument);
-			argument = strtok_r(NULL, space, &argumentPointer);
-			argnum++;
-		}
-
-		commargs[commandnum] = argnum;
-
-		commandnum++;
-		argnum = 0;
+		trimEndingNewline(command);
+		commands[commandnum] = command;
 		command = strtok_r(NULL, delim, &commandPointer);
+		commandnum++;
 	}
-	return commargs;
+
+	return commandnum;
+}
+
+
+void executeCommand(char **args){
+	pid_t pid = fork();
+
+	if(pid == -1){
+		printf("for error: %s\n", strerror(errno));
+		return;
+	}
+
+	else if(pid == 0){
+		// child process
+		execvp(args[0], args);
+
+		char* error = strerror(errno);
+		printf("shell: %s: %s\n", args[0], error);
+		return;
+	} else {
+		// parent process
+		int commandStatus;
+		waitpid(pid, &commandStatus, 0);
+		return;
+	}
 }
 
 int main(void){
@@ -104,9 +127,11 @@ int main(void){
    	signal (SIGCHLD, SIG_IGN);
 
 	char *input = (char*) malloc( MAXINPUT );
+
     strcpy(input, "");
 
-	char commandArray[ MAXCOMMANDS ][ MAXARGS ][ MAXARGLENGTH ];
+	char *commandArray[ MAXCOMMANDS ];
+	char *args[ MAXARGS ];
 
 	// Loop forever. This will be broken if exit is run
     while(1){
@@ -116,26 +141,19 @@ int main(void){
 		// cut newline off and replace with null
 		trimEndingNewline(input);
 		trimExtraWhitespace(input);
+		int commandnum = splitCommands(input, commandArray);
 
-		int *commargs = parseCommands(input, &commandArray[0][0][0]);
-
-		int command = 0;
-		while(commargs[command] != -1){
-			int argument;
-			for(argument = 0; argument<commargs[command]; argument++){
-				printf("%s\n", commandArray[command][argument]);
-				//run command with arguments
-			}
-			command++;
+		int i = 0;
+		int argnum = 0;
+		for(i=0; i<commandnum; i++){
+			argnum = parseCommand(commandArray[i], args);
+			if(strcmp("exit", args[0]) == 0)
+				break;
+			executeCommand(args);
 		}
 
-		if(strcmp("exit", input) == 0)
+		if(strcmp("exit", args[0]) == 0)
 			break;
-
-		if(strcmp("pwd", input) == 0){
-
-		}
-
     }
 
     exit(0);
