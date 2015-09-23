@@ -7,6 +7,8 @@
 #define MAXCOMMANDS 100
 #define MAXARGS 1000
 #define MAXARGLENGTH 100
+#define MAXINPUT ( MAXCOMMANDS * MAXARGS * MAXARGLENGTH )
+
 
 char prompt[80];
 
@@ -49,21 +51,44 @@ void trimExtraWhitespace(char *line){
 	strcpy(line, newline);
 
 }
-
-void parseCommands(char *line, char *commands){
+int * parseCommands(char *line, char *commands){
 	//char *argument = "hello there";
 	//memcpy(commands, argument, 11);
 
-	const char semicol[2] = ";&";
-	char *token;
+	const char delim[3] = ";&";
+	const char space[2] = " ";
+	char *command, *argument;
+	int commandnum = 0;
+	int argnum = 0;
+	static int commargs[ MAXCOMMANDS ];
 
-	token = strtok(line, semicol);
-	while(token != NULL){
-		trimExtraWhitespace(token);
-		printf("%s\n", token);
-		token = strtok(NULL, semicol);
+	memset(commargs, -1, MAXCOMMANDS);
+
+	char *commandPointer, *argumentPointer;
+
+	char *commandCopy = (char*) malloc( MAXINPUT );
+
+	command = strtok_r(line, delim, &commandPointer);
+	while(command != NULL){
+		trimExtraWhitespace(command);
+
+		strcpy(commandCopy, command);
+
+		argument = strtok_r(commandCopy, space, &argumentPointer);
+		while(argument != NULL){
+			//memcpy(commands + ((commandnum * MAXCOMMANDS) + (argnum * MAXARGS)), argument, strlen(argument));
+			strcpy(commands + ((commandnum * MAXARGS * MAXARGLENGTH) + (argnum * MAXARGLENGTH)), argument);
+			argument = strtok_r(NULL, space, &argumentPointer);
+			argnum++;
+		}
+
+		commargs[commandnum] = argnum;
+
+		commandnum++;
+		argnum = 0;
+		command = strtok_r(NULL, delim, &commandPointer);
 	}
-
+	return commargs;
 }
 
 int main(void){
@@ -78,9 +103,7 @@ int main(void){
    	signal (SIGTTOU, SIG_IGN);
    	signal (SIGCHLD, SIG_IGN);
 
-	int linelength =  MAXCOMMANDS * MAXARGS * MAXARGLENGTH;
-    char *input = (char*) malloc( linelength );
-
+	char *input = (char*) malloc( MAXINPUT );
     strcpy(input, "");
 
 	char commandArray[ MAXCOMMANDS ][ MAXARGS ][ MAXARGLENGTH ];
@@ -88,15 +111,23 @@ int main(void){
 	// Loop forever. This will be broken if exit is run
     while(1){
         printPrompt();
-        fgets(input, linelength, stdin);
+        fgets(input, MAXINPUT, stdin);
 
 		// cut newline off and replace with null
 		trimEndingNewline(input);
 		trimExtraWhitespace(input);
 
-		parseCommands(input, &commandArray[0][0][0]);
+		int *commargs = parseCommands(input, &commandArray[0][0][0]);
 
-		printf("%s\n", commandArray[0][0]);
+		int command = 0;
+		while(commargs[command] != -1){
+			int argument;
+			for(argument = 0; argument<commargs[command]; argument++){
+				printf("%s\n", commandArray[command][argument]);
+				//run command with arguments
+			}
+			command++;
+		}
 
 		if(strcmp("exit", input) == 0)
 			break;
