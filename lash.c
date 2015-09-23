@@ -13,14 +13,8 @@
 #define MAXARGLENGTH 100
 #define MAXINPUT ( MAXCOMMANDS * MAXARGS * MAXARGLENGTH )
 
-
+pid_t runningPid;
 char prompt[80];
-
-static volatile int keepRunning = 1;
-
-void intHandler(int dummy) {
-    keepRunning = 0;
-}
 
 void printPrompt(){
     printf("%s", prompt);
@@ -56,7 +50,7 @@ void trimExtraWhitespace(char *line){
 
 }
 
-int parseCommand(char *command, char **args){
+void parseCommand(char *command, char **args){
 
 	const char space[2] = " ";
 	int argnum = 0;
@@ -68,7 +62,6 @@ int parseCommand(char *command, char **args){
 		argument = strtok_r(NULL, space, &argumentPointer);
 		argnum++;
 	}
-	return argnum;
 }
 
 int splitCommands(char *line, char **commands){
@@ -92,14 +85,14 @@ int splitCommands(char *line, char **commands){
 
 
 void executeCommand(char **args){
-	pid_t pid = fork();
+	runningPid = fork();
 
-	if(pid == -1){
+	if(runningPid == -1){
 		printf("for error: %s\n", strerror(errno));
 		return;
 	}
 
-	else if(pid == 0){
+	else if(runningPid == 0){
 		// child process
 		execvp(args[0], args);
 
@@ -109,7 +102,7 @@ void executeCommand(char **args){
 	} else {
 		// parent process
 		int commandStatus;
-		waitpid(pid, &commandStatus, 0);
+		waitpid(runningPid, &commandStatus, 0);
 		return;
 	}
 }
@@ -121,12 +114,20 @@ void emptyArray(char **array, int length){
 	}
 }
 
+void sighandler(int signum){
+    if(signum == SIGINT){
+        kill(runningPid, SIGINT);
+    }
+
+    printf("\n");
+}
+
 int main(void){
 
 	sprintf(prompt, "%s LaSH %% ", getenv("USER"));
 
     // ignore all signals that should be passed to jobs
-    signal (SIGINT, SIG_IGN);
+    signal (SIGINT, sighandler);
     signal (SIGQUIT, SIG_IGN);
    	signal (SIGTSTP, SIG_IGN);
    	signal (SIGTTIN, SIG_IGN);
@@ -153,10 +154,9 @@ int main(void){
 
 		if(commandnum != 0){
 			int i = 0;
-			int argnum = 0;
 			for(i=0; i<commandnum; i++){
 				emptyArray(args, MAXARGS);
-				argnum = parseCommand(commandArray[i], args);
+				parseCommand(commandArray[i], args);
 				if(strcmp("exit", args[0]) == 0)
 					break;
 				if(strcmp(args[0], "") != 0)
