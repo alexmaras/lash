@@ -54,15 +54,13 @@ void parseCommands(char *line, char *commands){
 	//char *argument = "hello there";
 	//memcpy(commands, argument, 11);
 
-	const char semicol[2] = ";";
+	const char semicol[2] = ";&";
 	char *token;
 
 	token = strtok(line, semicol);
-
 	while(token != NULL){
-
+		trimExtraWhitespace(token);
 		printf("%s\n", token);
-
 		token = strtok(NULL, semicol);
 	}
 
