@@ -1,2 +1,2 @@
 lashmake: lash.c
-	gcc lash.c -o bin/lash
+	gcc lash.c -o bin/lash -Wall
