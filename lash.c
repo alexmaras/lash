@@ -114,6 +114,13 @@ void executeCommand(char **args){
 	}
 }
 
+void emptyArray(char **array, int length){
+	int delete = 0;
+	for(delete = 0; delete < length; delete++){
+		array[delete] = NULL;
+	}
+}
+
 int main(void){
 
 	sprintf(prompt, "%s LaSH %% ", getenv("USER"));
@@ -127,14 +134,15 @@ int main(void){
    	signal (SIGCHLD, SIG_IGN);
 
 	char *input = (char*) malloc( MAXINPUT );
-
-    strcpy(input, "");
-
 	char *commandArray[ MAXCOMMANDS ];
 	char *args[ MAXARGS ];
 
 	// Loop forever. This will be broken if exit is run
     while(1){
+		strcpy(input, "");
+
+		emptyArray(commandArray, MAXCOMMANDS);
+
         printPrompt();
         fgets(input, MAXINPUT, stdin);
 
@@ -143,17 +151,21 @@ int main(void){
 		trimExtraWhitespace(input);
 		int commandnum = splitCommands(input, commandArray);
 
-		int i = 0;
-		int argnum = 0;
-		for(i=0; i<commandnum; i++){
-			argnum = parseCommand(commandArray[i], args);
+		if(commandnum != 0){
+			int i = 0;
+			int argnum = 0;
+			for(i=0; i<commandnum; i++){
+				emptyArray(args, MAXARGS);
+				argnum = parseCommand(commandArray[i], args);
+				if(strcmp("exit", args[0]) == 0)
+					break;
+				if(strcmp(args[0], "") != 0)
+					executeCommand(args);
+			}
+
 			if(strcmp("exit", args[0]) == 0)
 				break;
-			executeCommand(args);
 		}
-
-		if(strcmp("exit", args[0]) == 0)
-			break;
     }
 
     exit(0);
