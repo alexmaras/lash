@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define MAXCOMMANDS 100
 #define MAXARGS 1000
@@ -15,10 +17,6 @@
 
 pid_t runningPid;
 char prompt[80];
-
-void printPrompt(){
-    printf("%s", prompt);
-}
 
 bool isEscaped(char *line, int index){
     if(line[index-1] == '\\'){
@@ -78,8 +76,8 @@ void stripStartAndEndSpacesAndSemiColons(char *line){
 	int j = 0;
 	int i = 0;
 
-    if(line[length-1] == '\n')
-		line[length-1] = '\0';
+    // if(line[length-1] == '\n')
+	// 	line[length-1] = '\0';
 
 	char *newline = (char*) malloc( length );
 
@@ -114,9 +112,6 @@ void cleanString(char *line, int quotes[][2], int numberOfQuotePairs){
 	int j = 0;
 	int i = 0;
 
-    if(line[length-1] == '\n')
-		line[length-1] = '\0';
-
 	char *newline = (char*) malloc( length );
 
 	for(i = 0; i<length; i++){
@@ -146,6 +141,8 @@ void cleanString(char *line, int quotes[][2], int numberOfQuotePairs){
 		}
 	}
 
+    newline[j] = '\0';
+
 	strcpy(line, newline);
 
 }
@@ -167,7 +164,6 @@ void parseCommand(char *command, char **args, int quotes[][2], int numberOfQuote
                 j++;
                 copyIndex++;
             }
-            tempString[j] = '\0';
             stripStartAndEndSpacesAndSemiColons(tempString);
 
             if((tempString[0] == '"' && tempString[strlen(tempString)-1] == '"') || (tempString[0] == '\'' && tempString[strlen(tempString)-1] == '\'')){
@@ -181,6 +177,7 @@ void parseCommand(char *command, char **args, int quotes[][2], int numberOfQuote
             }
             tempString[j] = '\0';
             args[argnum] = tempString;
+
             argnum++;
             copyIndex++;
         }
@@ -269,8 +266,8 @@ void executeCommand(char **args){
 		execvp(args[0], args);
 
 		char* error = strerror(errno);
-		printf("shell: %s: %s\n", args[0], error);
-		return;
+		printf("\nshell: %s: %s\n", args[0], error);
+		exit(1);
 	} else {
 		// parent process
 		int commandStatus;
@@ -306,26 +303,23 @@ int main(void){
    	signal (SIGTTOU, SIG_IGN);
    	signal (SIGCHLD, SIG_IGN);
 
-	char *input = (char*) malloc( MAXINPUT );
+	// char *input = (char*) malloc( MAXINPUT );
 	char *commandArray[ MAXCOMMANDS ];
 	char *args[ MAXARGS ];
 
 	// Loop forever. This will be broken if exit is run
     while(1){
-		strcpy(input, "");
 
-		emptyArray(commandArray, MAXCOMMANDS);
-
-        printPrompt();
-        fgets(input, MAXINPUT, stdin);
+        // printPrompt();
+        char *input = readline(prompt);
+        add_history(input);
 
         int quotes[MAXCOMMANDS][2];
 
-
         int foundAmount = findQuoteLocations(input, quotes);
-		cleanString(input, quotes, foundAmount);
+        cleanString(input, quotes, foundAmount);
 
-
+        emptyArray(commandArray, MAXCOMMANDS);
 		int commandnum = splitCommands(input, commandArray, quotes, foundAmount);
 
 		if(commandnum != 0){
@@ -342,6 +336,8 @@ int main(void){
 			if(strcmp("exit", args[0]) == 0)
 				break;
 		}
+
+        free(input);
     }
 
     exit(0);
