@@ -147,7 +147,7 @@ void cleanString(char *line, int quotes[][2], int numberOfQuotePairs){
 
 }
 
-void parseCommand(char *command, char **args, int quotes[][2], int numberOfQuotePairs){
+int parseCommand(char *command, char **args, int quotes[][2], int numberOfQuotePairs){
 	int argnum = 0;
     int i;
     char currentChar = ' ';
@@ -182,6 +182,7 @@ void parseCommand(char *command, char **args, int quotes[][2], int numberOfQuote
             copyIndex++;
         }
     }
+	return argnum;
 }
 
 int splitCommands(char *line, char **commands, int quotes[][2], int numberOfQuotePairs){
@@ -291,8 +292,8 @@ void sighandler(int signum){
     printf("\n");
 }
 
-int main(void){
 
+int main(void){
 	sprintf(prompt, "%s LaSH %% ", getenv("USER"));
 
     // ignore all signals that should be passed to jobs
@@ -315,6 +316,7 @@ int main(void){
         add_history(input);
 
         int quotes[MAXCOMMANDS][2];
+		int argnum = 0;
 
         int foundAmount = findQuoteLocations(input, quotes);
         cleanString(input, quotes, foundAmount);
@@ -323,11 +325,11 @@ int main(void){
 		int commandnum = splitCommands(input, commandArray, quotes, foundAmount);
 
 		if(commandnum != 0){
-			int i = 0;
+			int i;
 			for(i=0; i<commandnum; i++){
 				emptyArray(args, MAXARGS);
-				parseCommand(commandArray[i], args, quotes, foundAmount);
-				if(strcmp("exit", args[0]) == 0)
+				argnum = parseCommand(commandArray[i], args, quotes, foundAmount);
+				if(strcmp("exit", args[0]) == 0 || (strcmp("cd", args[0]) == 0))
 					break;
 				if(strcmp(args[0], "") != 0)
 					executeCommand(args);
@@ -335,6 +337,24 @@ int main(void){
 
 			if(strcmp("exit", args[0]) == 0)
 				break;
+			if(strcmp("cd", args[0]) == 0){
+				if(argnum == 1){
+					chdir(getenv("HOME"));
+				} else {
+					char path[MAXARGLENGTH] = "";
+					strcpy(path, args[1]);
+					if(args[1][0] == '~'){
+						strcpy(path, getenv("HOME"));
+						char buffer[MAXARGLENGTH] = "";
+						memcpy(buffer, &args[1][1], strlen(args[1])-1);
+						strcat(path, buffer);
+					}
+					int status = chdir(path);
+					char *error = strerror(errno);
+					if(status == -1)
+						printf("%s\n", error);
+				}
+			}
 		}
 
         free(input);
