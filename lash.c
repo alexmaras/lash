@@ -14,9 +14,10 @@
 #define MAXARGS 1000
 #define MAXARGLENGTH 100
 #define MAXINPUT ( MAXCOMMANDS * MAXARGS * MAXARGLENGTH )
+#define MAXPROMPT 40
 
 pid_t runningPid;
-char prompt[80];
+char prompt[MAXPROMPT];
 
 bool isEscaped(char *line, int index){
     if(line[index-1] == '\\'){
@@ -311,7 +312,6 @@ int main(void){
 	// Loop forever. This will be broken if exit is run
     while(1){
 
-        // printPrompt();
         char *input = readline(prompt);
         add_history(input);
 
@@ -329,7 +329,8 @@ int main(void){
 			for(i=0; i<commandnum; i++){
 				emptyArray(args, MAXARGS);
 				argnum = parseCommand(commandArray[i], args, quotes, foundAmount);
-				if(strcmp("exit", args[0]) == 0 || (strcmp("cd", args[0]) == 0))
+				bool shellCommand = (strcmp("exit", args[0]) == 0 || strcmp("cd", args[0]) == 0 || strcmp("prompt", args[0]) == 0);
+				if(shellCommand)
 					break;
 				if(strcmp(args[0], "") != 0)
 					executeCommand(args);
@@ -353,6 +354,19 @@ int main(void){
 					char *error = strerror(errno);
 					if(status == -1)
 						printf("%s\n", error);
+				}
+			}
+			if(strcmp("prompt", args[0]) == 0){
+				if(argnum == 1)
+					printf("No prompt given\n");
+				else {
+					if(strlen(args[1]) > MAXPROMPT-1){
+						printf("The prompt can only be %d characters long\n", MAXPROMPT);
+					}
+					else {
+						strcpy(prompt, args[1]);
+						strcat(prompt, " ");
+					}
 				}
 			}
 		}
