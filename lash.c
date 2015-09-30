@@ -10,11 +10,15 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+
 #define MAXCOMMANDS 100
 #define MAXARGS 1000
 #define MAXARGLENGTH 100
 #define MAXINPUT ( MAXCOMMANDS * MAXARGS * MAXARGLENGTH )
 #define MAXPROMPT 40
+
+#include "lash.h"
+
 
 pid_t runningPid;
 char prompt[MAXPROMPT];
@@ -38,14 +42,14 @@ bool followedBySemiColon(char *line, int index){
     return false;
 }
 
-bool insideQuotes(int index, int quotes[][2], int numberOfQuotePairs){
+int insideQuotes(int index, int quotes[][3], int numberOfQuotePairs){
     int i;
     for(i = 0; i < numberOfQuotePairs; i++){
         if(quotes[i][0] < index && index < quotes[i][1]){
-            return true;
+            return quotes[i][2];
         }
     }
-    return false;
+    return 0;
 }
 
 bool atStart(int index, char *line){
@@ -77,9 +81,6 @@ void stripStartAndEndSpacesAndSemiColons(char *line){
 	int j = 0;
 	int i = 0;
 
-    // if(line[length-1] == '\n')
-	// 	line[length-1] = '\0';
-
 	char *newline = (char*) malloc( length );
 
 	for(i = 0; i<length; i++){
@@ -108,7 +109,11 @@ void stripStartAndEndSpacesAndSemiColons(char *line){
 
 }
 
-void cleanString(char *line, int quotes[][2], int numberOfQuotePairs){
+void cleanString(char *line){
+	// get locations of quotes
+	int quotes[MAXCOMMANDS][3];
+	int numberOfQuotePairs = findQuoteLocations(line, quotes);
+
 	int length = strlen(line);
 	int j = 0;
 	int i = 0;
@@ -145,10 +150,52 @@ void cleanString(char *line, int quotes[][2], int numberOfQuotePairs){
     newline[j] = '\0';
 
 	strcpy(line, newline);
-
 }
 
-int parseCommand(char *command, char **args, int quotes[][2], int numberOfQuotePairs){
+void removeEscapeSlashesAndQuotes(char *line){
+
+	int quotes[MAXCOMMANDS][3];
+	int numberOfQuotePairs = findQuoteLocations(line, quotes);
+
+	char *tempString = (char*) malloc( MAXARGLENGTH );
+	int i, j = 0, nextchar = -1;
+
+	for(i = 0; i < strlen(line); i++){
+		nextchar = -1;
+		if(i != (strlen(line) - 1)){
+			if(line[i+1] == '\''){
+				nextchar = 1;
+			} else if(line[i+1] == '\"'){
+				nextchar = 2;
+			}
+		}
+		int quoteType = insideQuotes(i, quotes, numberOfQuotePairs);
+		if(line[i] != '\\' || isEscaped(line, i) || (quoteType != 0 && ( nextchar != quoteType ))){
+			tempString[j] = line[i];
+			j++;
+		}
+	}
+
+
+    if((line[0] == '"' && line[strlen(line)-1] == '"') || (line[0] == '\'' && line[strlen(line)-1] == '\'')){
+    	int start = 1;
+        int end = strlen(tempString)-1;
+        j = 0;
+        for(i = start; i < end; i++){
+        	tempString[j] = tempString[i];
+            j++;
+        }
+    }
+
+	tempString[j] = '\0';
+	strcpy(line, tempString);
+	free(tempString);
+}
+
+int parseCommand(char *command, char **args){
+	int quotes[MAXCOMMANDS][3];
+	int numberOfQuotePairs = findQuoteLocations(command, quotes);
+
 	int argnum = 0;
     int i;
     char currentChar = ' ';
@@ -166,17 +213,9 @@ int parseCommand(char *command, char **args, int quotes[][2], int numberOfQuoteP
                 copyIndex++;
             }
             stripStartAndEndSpacesAndSemiColons(tempString);
+			tempString[j] = '\0';
 
-            if((tempString[0] == '"' && tempString[strlen(tempString)-1] == '"') || (tempString[0] == '\'' && tempString[strlen(tempString)-1] == '\'')){
-                int start = 1;
-                int end = strlen(tempString)-1;
-                j = 0;
-                for(i = start; i < end; i++){
-                    tempString[j] = tempString[i];
-                    j++;
-                }
-            }
-            tempString[j] = '\0';
+			removeEscapeSlashesAndQuotes(tempString);
             args[argnum] = tempString;
 
             argnum++;
@@ -186,7 +225,11 @@ int parseCommand(char *command, char **args, int quotes[][2], int numberOfQuoteP
 	return argnum;
 }
 
-int splitCommands(char *line, char **commands, int quotes[][2], int numberOfQuotePairs){
+int splitCommands(char *line, char **commands){
+
+	int quotes[MAXCOMMANDS][3];
+	int numberOfQuotePairs = findQuoteLocations(line, quotes);
+
 	int commandnum = 0;
     int i;
     char currentChar = ' ';
@@ -204,7 +247,7 @@ int splitCommands(char *line, char **commands, int quotes[][2], int numberOfQuot
                 copyIndex++;
             }
             tempString[j] = '\0';
-            cleanString(tempString, quotes, numberOfQuotePairs);
+            cleanString(tempString);
             commands[commandnum] = tempString;
             commandnum++;
             copyIndex++;
@@ -214,7 +257,7 @@ int splitCommands(char *line, char **commands, int quotes[][2], int numberOfQuot
 }
 
 
-bool indexNotInArray(int array[][2], int arrayIndex, int foundCharIndex){
+bool indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex){
     int index;
     for(index = 0; index < arrayIndex; index++){
         if(array[index][0] == foundCharIndex || array[index][1] == foundCharIndex){
@@ -224,7 +267,7 @@ bool indexNotInArray(int array[][2], int arrayIndex, int foundCharIndex){
     return true;
 }
 
-int findQuoteLocations(char *line, int quotes[][2]){
+int findQuoteLocations(char *line, int quotes[][3]){
     int index, secondIndex, quoteIndex = 0;
     char currentChar = ' ';
     int linelength = strlen(line);
@@ -243,11 +286,16 @@ int findQuoteLocations(char *line, int quotes[][2]){
             }
 
             if(!foundMatch){
+				return -1;
                 // quit immediately
             }
 
+			// 1st element = 1st index of quotes
+			// 2nd element = 2nd index of quotes
+			// 3rd element = 1 for single quote, 2 for double quote
             quotes[quoteIndex][0] = index;
             quotes[quoteIndex][1] = secondIndex;
+			quotes[quoteIndex][2] = ( currentChar == '\'' ? 1 : 2 );
             quoteIndex++;
             index = secondIndex+1;
         }
@@ -315,62 +363,64 @@ int main(void){
         char *input = readline(prompt);
         add_history(input);
 
-        int quotes[MAXCOMMANDS][2];
 		int argnum = 0;
 
-        int foundAmount = findQuoteLocations(input, quotes);
-        cleanString(input, quotes, foundAmount);
+		int quotes[MAXCOMMANDS][3];
+		int numberOfQuotes = findQuoteLocations(input, quotes);
 
-        emptyArray(commandArray, MAXCOMMANDS);
-		int commandnum = splitCommands(input, commandArray, quotes, foundAmount);
-
-		if(commandnum != 0){
-			int i;
-			for(i=0; i<commandnum; i++){
-				emptyArray(args, MAXARGS);
-				argnum = parseCommand(commandArray[i], args, quotes, foundAmount);
-				bool shellCommand = (strcmp("exit", args[0]) == 0 || strcmp("cd", args[0]) == 0 || strcmp("prompt", args[0]) == 0);
-				if(shellCommand)
-					break;
-				if(strcmp(args[0], "") != 0)
-					executeCommand(args);
-			}
-
-			if(strcmp("exit", args[0]) == 0)
-				break;
-			if(strcmp("cd", args[0]) == 0){
-				if(argnum == 1){
-					chdir(getenv("HOME"));
-				} else {
-					char path[MAXARGLENGTH] = "";
-					strcpy(path, args[1]);
-					if(args[1][0] == '~'){
-						strcpy(path, getenv("HOME"));
-						char buffer[MAXARGLENGTH] = "";
-						memcpy(buffer, &args[1][1], strlen(args[1])-1);
-						strcat(path, buffer);
-					}
-					int status = chdir(path);
-					char *error = strerror(errno);
-					if(status == -1)
-						printf("%s\n", error);
+		if(numberOfQuotes == -1){
+			printf("Quotes mismatch\n");
+		} else {
+			cleanString(input);
+			emptyArray(commandArray, MAXCOMMANDS);
+			int commandnum = splitCommands(input, commandArray);
+			if(commandnum != 0){
+				int i;
+				for(i=0; i<commandnum; i++){
+					emptyArray(args, MAXARGS);
+					argnum = parseCommand(commandArray[i], args);
+					bool shellCommand = (strcmp("exit", args[0]) == 0 || strcmp("cd", args[0]) == 0 || strcmp("prompt", args[0]) == 0);
+					if(shellCommand)
+						break;
+					if(strcmp(args[0], "") != 0)
+						executeCommand(args);
 				}
-			}
-			if(strcmp("prompt", args[0]) == 0){
-				if(argnum == 1)
-					printf("No prompt given\n");
-				else {
-					if(strlen(args[1]) > MAXPROMPT-1){
-						printf("The prompt can only be %d characters long\n", MAXPROMPT);
+
+				if(strcmp("exit", args[0]) == 0)
+					break;
+				if(strcmp("cd", args[0]) == 0){
+					if(argnum == 1){
+						chdir(getenv("HOME"));
+					} else {
+						char path[MAXARGLENGTH] = "";
+						strcpy(path, args[1]);
+						if(args[1][0] == '~'){
+							strcpy(path, getenv("HOME"));
+							char buffer[MAXARGLENGTH] = "";
+							memcpy(buffer, &args[1][1], strlen(args[1])-1);
+							strcat(path, buffer);
+						}
+						int status = chdir(path);
+						char *error = strerror(errno);
+						if(status == -1)
+							printf("%s\n", error);
 					}
+				}
+				if(strcmp("prompt", args[0]) == 0){
+					if(argnum == 1)
+						printf("No prompt given\n");
 					else {
-						strcpy(prompt, args[1]);
-						strcat(prompt, " ");
+						if(strlen(args[1]) > MAXPROMPT-1){
+							printf("The prompt can only be %d characters long\n", MAXPROMPT);
+						}
+						else {
+							strcpy(prompt, args[1]);
+							strcat(prompt, " ");
+						}
 					}
 				}
 			}
 		}
-
         free(input);
     }
 
