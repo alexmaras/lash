@@ -21,6 +21,7 @@
 #include "lashparser.c"
 
 pid_t runningPid;
+bool acceptInterrupt;
 char prompt[MAXPROMPT];
 
 void executeCommand(char **args){
@@ -36,12 +37,14 @@ void executeCommand(char **args){
 		execvp(args[0], args);
 
 		char* error = strerror(errno);
-		printf("\nshell: %s: %s\n", args[0], error);
+		printf("LaSH: %s: %s\n", args[0], error);
 		exit(1);
 	} else {
 		// parent process
 		int commandStatus;
+		acceptInterrupt = true;
 		waitpid(runningPid, &commandStatus, 0);
+		acceptInterrupt = false;
 		return;
 	}
 }
@@ -56,15 +59,17 @@ void emptyArray(char **array, int length){
 
 void sighandler(int signum){
     if(signum == SIGINT){
-        kill(runningPid, SIGINT);
+		if(acceptInterrupt)
+			kill(runningPid, SIGINT);
+        //kill(runningPid, SIGINT);
     }
-
-    printf("\n");
+	rl_free_line_state();
+	rl_cleanup_after_signal();
 }
 
 
 int main(void){
-	sprintf(prompt, "%s LaSH %% ", getenv("USER"));
+	sprintf(prompt, "\x1b[32m%s LaSH %% \x1b[0m", getenv("USER"));
 
     // ignore all signals that should be passed to jobs
     signal (SIGINT, sighandler);
@@ -82,7 +87,7 @@ int main(void){
 
 	// Loop forever. This will be broken if exit is run
     while(1){
-
+		acceptInterrupt = false;
 		char *commandArray[ MAXCOMMANDS ];
 		char *args[ MAXARGS ];
 
