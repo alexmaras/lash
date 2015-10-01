@@ -9,20 +9,22 @@
 #include <stdbool.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-
-
-#define MAXCOMMANDS 100
-#define MAXARGS 1000
-#define MAXARGLENGTH 100
-#define MAXINPUT ( MAXCOMMANDS * MAXARGS * MAXARGLENGTH )
-#define MAXPROMPT 40
+#include <linux/limits.h>
 
 #include "lash.h"
-#include "lashparser.c"
+#include "lashparser.h"
+
+#define MAXPROMPT 40
 
 pid_t runningPid;
 bool acceptInterrupt;
 char prompt[MAXPROMPT];
+
+static int maxcommands;
+static int maxargs;
+static int maxarglength;
+static int maxpromptlength;
+
 
 void executeCommand(char **args){
 	runningPid = fork();
@@ -68,7 +70,13 @@ void sighandler(int signum){
 }
 
 
-int main(void){
+void runLash(int command, int args, int arglength, int promptlength){
+
+	maxcommands     = command;
+	maxargs         = args;
+	maxarglength    = arglength;
+	maxpromptlength = promptlength;
+
 	sprintf(prompt, "\x1b[32m%s LaSH %% \x1b[0m", getenv("USER"));
 
     // ignore all signals that should be passed to jobs
@@ -79,17 +87,15 @@ int main(void){
    	signal (SIGTTOU, SIG_IGN);
    	signal (SIGCHLD, SIG_IGN);
 
-	//char *commandArray[ MAXCOMMANDS ];
-	//char *args[ MAXARGS ];
-
 	stifle_history(100);
 
+	struct LashParser *parser = newLashParser(maxcommands, maxargs, maxarglength);
 
 	// Loop forever. This will be broken if exit is run
     while(1){
 		acceptInterrupt = false;
-		char *commandArray[ MAXCOMMANDS ];
-		char *args[ MAXARGS ];
+		char *commandArray[maxcommands];
+		char *args[maxargs];
 
         char *input = readline(prompt);
 		if(strcmp(input, "") != 0){
@@ -98,18 +104,18 @@ int main(void){
 
 		int argnum = 0;
 		int commandnum = 0;
-		int quotes[MAXCOMMANDS][3];
+		int quotes[maxcommands][3];
 		int numberOfQuotes = findQuoteLocations(input, quotes);
 
 		if(numberOfQuotes == -1){
 			printf("Quotes mismatch\n");
 		} else {
-			cleanString(input);
-			commandnum = splitCommands(input, commandArray);
+			cleanString(parser, input);
+			commandnum = splitCommands(parser, input, commandArray);
 			if(commandnum != 0){
 				int i;
 				for(i=0; i<commandnum; i++){
-					argnum = parseCommand(commandArray[i], args);
+					argnum = parseCommand(parser, commandArray[i], args);
 					bool shellCommand = (strcmp("exit", args[0]) == 0 || strcmp("cd", args[0]) == 0 || strcmp("prompt", args[0]) == 0);
 					if(shellCommand)
 						break;
@@ -124,11 +130,11 @@ int main(void){
 					if(argnum == 1){
 						chdir(getenv("HOME"));
 					} else {
-						char path[MAXARGLENGTH] = "";
+						char path[PATH_MAX] = "";
 						strcpy(path, args[1]);
 						if(args[1][0] == '~'){
 							strcpy(path, getenv("HOME"));
-							char buffer[MAXARGLENGTH] = "";
+							char buffer[PATH_MAX] = "";
 							memcpy(buffer, &args[1][1], strlen(args[1])-1);
 							strcat(path, buffer);
 						}
@@ -142,8 +148,8 @@ int main(void){
 					if(argnum == 1)
 						printf("No prompt given\n");
 					else {
-						if(strlen(args[1]) > MAXPROMPT-1){
-							printf("The prompt can only be %d characters long\n", MAXPROMPT);
+						if(strlen(args[1]) > maxpromptlength-1){
+							printf("The prompt can only be %d characters long\n", maxpromptlength);
 						}
 						else {
 							strcpy(prompt, args[1]);

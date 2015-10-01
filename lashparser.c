@@ -1,3 +1,27 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include "lashparser.h"
+
+struct LashParser{
+	int maxcommands;
+	int maxargs;
+	int maxarglength;
+	int maxinput;
+};
+
+struct LashParser *newLashParser(commands, args, arglength){
+	struct LashParser *parser = (struct LashParser *)malloc(sizeof(struct LashParser));
+	parser->maxcommands = commands;
+	parser->maxargs = args;
+	parser->maxarglength = arglength;
+	parser->maxinput = commands * args * arglength;
+
+	return parser;
+}
+
 bool isEscaped(char *line, int index){
 	if(index == 0)
 		return false;
@@ -87,16 +111,16 @@ void stripStartAndEndSpacesAndSemiColons(char *line){
 	free(newline);
 }
 
-void cleanString(char *line){
+void cleanString(struct LashParser *parser, char *line){
 	// get locations of quotes
-	int quotes[MAXCOMMANDS][3];
+	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(line, quotes);
 
 	int length = strlen(line);
 	int j = 0;
 	int i = 0;
 
-	char *newline = (char*) malloc( MAXARGS * MAXARGLENGTH );
+	char *newline = (char*) malloc( parser->maxargs * parser->maxarglength );
 
 	for(i = 0; i<length; i++){
 		if( insideQuotes(i, quotes, numberOfQuotePairs) ||
@@ -133,12 +157,12 @@ void cleanString(char *line){
 	free(newline);
 }
 
-void removeEscapeSlashesAndQuotes(char *line){
+void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line){
 
-	int quotes[MAXCOMMANDS][3];
+	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(line, quotes);
 
-	char *tempString = (char*) malloc( MAXARGLENGTH );
+	char *tempString = (char*) malloc( parser->maxarglength );
 	int i, k, j = 0, nextchar = -1;
 	bool enclosingQuote;
 
@@ -211,10 +235,10 @@ int copyString(char *copyTo, char *copyFrom, int startAt, int endAt){
 }
 
 
-int parseCommand(char *command, char **args){
+int parseCommand(struct LashParser *parser, char *command, char **args){
 
 	// Get the quote locations for the current command
-	int quotes[MAXCOMMANDS][3];
+	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(command, quotes);
 
     int i;
@@ -225,7 +249,6 @@ int parseCommand(char *command, char **args){
 
 
     for(i = 0; i < strlen(command); i++){
-		//args[argnum] = (char*) malloc( (int)(MAXARGLENGTH * sizeof(char)));
 		currentChar = command[i];
         bool lastChar = (i == strlen(command)-1);
 
@@ -242,10 +265,10 @@ int parseCommand(char *command, char **args){
 		);
 
 		if(foundBreak){
-			args[argnum] = (char*) malloc( (int)(MAXARGLENGTH * sizeof(char)));
+			args[argnum] = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
 			copyIndex = copyString(args[argnum], command, copyIndex, ( lastChar ? i+1 : i));
 	        stripStartAndEndSpacesAndSemiColons(args[argnum]);
-			removeEscapeSlashesAndQuotes(args[argnum]);
+			removeEscapeSlashesAndQuotes(parser, args[argnum]);
 
             argnum++;
             //copyIndex++;
@@ -255,9 +278,9 @@ int parseCommand(char *command, char **args){
 	return argnum;
 }
 
-int splitCommands(char *line, char **commands){
+int splitCommands(struct LashParser *parser, char *line, char **commands){
 
-	int quotes[MAXCOMMANDS][3];
+	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(line, quotes);
 
 	int commandnum = 0;
@@ -269,7 +292,7 @@ int splitCommands(char *line, char **commands){
         bool lastChar = (i == strlen(line)-1);
         currentChar = line[i];
         if(lastChar || ((currentChar == '&' || currentChar == ';') && !followedBySemiColon(line, i) && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs))){
-            char *tempString = (char*) malloc( MAXINPUT );
+            char *tempString = (char*) malloc(parser->maxinput);
             int j = 0;
             while((copyIndex < i && !lastChar) || (copyIndex <= i && lastChar) ){
                 tempString[j] = line[copyIndex];
@@ -277,7 +300,7 @@ int splitCommands(char *line, char **commands){
                 copyIndex++;
             }
             tempString[j] = '\0';
-            cleanString(tempString);
+            cleanString(parser, tempString);
             commands[commandnum] = tempString;
             commandnum++;
             copyIndex++;
