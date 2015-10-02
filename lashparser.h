@@ -21,6 +21,7 @@ void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
 void sighandler(int signum);
 int  splitCommands(struct LashParser *parser, char *line, char **commands);
 void stripStartAndEndSpacesAndSemiColons(char *line);
-
+int  findPipes(struct LashParser *parser, char *line, int *pipeIndexes);
+int  findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2]);
 
 #endif
