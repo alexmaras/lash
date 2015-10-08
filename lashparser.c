@@ -12,7 +12,7 @@ struct LashParser{
 	int maxinput;
 };
 
-struct LashParser *newLashParser(commands, args, arglength){
+struct LashParser *newLashParser(int commands, int args, int arglength){
 	struct LashParser *parser = (struct LashParser *)malloc(sizeof(struct LashParser));
 	parser->maxcommands = commands;
 	parser->maxargs = args;
@@ -141,6 +141,12 @@ void cleanString(struct LashParser *parser, char *line){
 				        (atStart(i, line)) ||	// space at start
 				        (atEnd(i, line))   ||	// space at end
 				        (line[i+1] == ' ') ||	// space followed by space
+						(line[i+1] == '|') ||
+						(line[i+1] == '<') ||
+						(line[i+1] == '>') ||
+						(line[i-1] == '|') ||
+						(line[i-1] == '<') ||
+						(line[i-1] == '>') ||
 				        (j == 0) 				// first character of the new string
 			        )
                 )
@@ -233,11 +239,11 @@ int copyString(char *copyTo, char *copyFrom, int startAt, int endAt){
 		startAt++;
 	}
 	copyTo[i] = '\0';
-	return startAt;
+	return startAt+1;
 }
 
 
-int parseCommand(struct LashParser *parser, char *command, char **args){
+int parseCommand(struct LashParser *parser, char *command, char **args, int *pipeOrRedirect){
 
 	// Get the quote locations for the current command
 	int quotes[parser->maxcommands][3];
@@ -256,7 +262,7 @@ int parseCommand(struct LashParser *parser, char *command, char **args){
 
 	pipenum = findPipes(parser, command, pipeIndexes);
 	redirectnum = findRedirects(parser, command, redirectIndexes);
-
+	printf("redirects: %d\npipes: %d\n", redirectnum, pipenum);
 /*
 	int k = 0;
 	for(k = 0; k < pipenum; k++)
@@ -265,7 +271,7 @@ int parseCommand(struct LashParser *parser, char *command, char **args){
     for(k = 0; k < redirectnum; k++)
         printf("redirect: %d, %d\n", redirectIndexes[k][0], redirectIndexes[k][1]);
 */
-
+	printf("command: %s\n", command);
     for(i = 0; i < strlen(command); i++){
 		currentChar = command[i];
         bool lastChar = (i == strlen(command)-1);
@@ -276,18 +282,27 @@ int parseCommand(struct LashParser *parser, char *command, char **args){
 		bool foundBreak = (
 			lastChar ||
 			(
-				currentChar == ' ' &&
+				(currentChar == ' ' || currentChar == '|' || currentChar == '<' || currentChar == '>') &&
 				!isEscaped(command, i) &&
 				!insideQuotes(i, quotes, numberOfQuotePairs)
 			)
 		);
 
 		if(foundBreak){
+			if(currentChar == '|')
+				pipeOrRedirect[argnum] = PIPE;
+			else if(currentChar == '<')
+				pipeOrRedirect[argnum] = REDIRECTBACKWARD;
+			else if(currentChar == '>')
+				pipeOrRedirect[argnum] = REDIRECTFORWARD;
+			else
+				pipeOrRedirect[argnum] = 0;
+
+			printf("pipe/redir: %d\n", pipeOrRedirect[argnum]);
 			args[argnum] = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
 			copyIndex = copyString(args[argnum], command, copyIndex, ( lastChar ? i+1 : i));
 	        stripStartAndEndSpacesAndSemiColons(args[argnum]);
 			removeEscapeSlashesAndQuotes(parser, args[argnum]);
-
             argnum++;
             //copyIndex++;
         }
@@ -296,7 +311,26 @@ int parseCommand(struct LashParser *parser, char *command, char **args){
 	return argnum;
 }
 
+int foundPipeOrRedirect(int index, int *pipes, int pipenum, int redirects[][2], int redirectnum){
+	int i;
+	for(i = 0; i < pipenum; i++){
+		if(pipes[i] == index){
+			return PIPE;
+		}
+	}
+
+	for(i = 0; i < redirectnum; i++){
+		if(redirects[i][0] == index){
+			return redirects[i][1]; // WILL RETURN REDIRECTBACKWARD IF BACKWARD, REDIRECTFORWARD IF FORWARD
+		}
+	}
+
+	return 0;
+}
+
 int splitCommands(struct LashParser *parser, char *line, char **commands){
+
+	cleanString(parser, line);
 
 	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(line, quotes);
@@ -353,7 +387,7 @@ int findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2
     for(i = 0; i < strlen(line); i++){
         if((line[i] == '<' || line[i] == '>') && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs)){
 			redirectIndexes[j][0] = i;
-			redirectIndexes[j][1] = (line[i] == '<' ? 0 : 1);
+			redirectIndexes[j][1] = (line[i] == '<' ? REDIRECTBACKWARD : REDIRECTFORWARD);
             j++;
         }
     }

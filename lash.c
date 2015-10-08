@@ -26,14 +26,12 @@ static int maxarglength;
 static int maxpromptlength;
 
 
-void executeCommand(char **args){
+void executeCommand(char **args, int argnum, int *pipeOrRedirect){
 	runningPid = fork();
-
 	if(runningPid == -1){
 		printf("for error: %s\n", strerror(errno));
 		return;
 	}
-
 	else if(runningPid == 0){
 		// child process
 		execvp(args[0], args);
@@ -91,11 +89,14 @@ void runLash(int command, int args, int arglength, int promptlength){
 
 	struct LashParser *parser = newLashParser(maxcommands, maxargs, maxarglength);
 
+	printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
+
 	// Loop forever. This will be broken if exit is run
     while(1){
 		acceptInterrupt = false;
 		char *commandArray[maxcommands];
 		char *args[maxargs];
+		int  pipeOrRedirect[maxargs];
 
         char *input = readline(prompt);
 		if(strcmp(input, "") != 0){
@@ -110,17 +111,16 @@ void runLash(int command, int args, int arglength, int promptlength){
 		if(numberOfQuotes == -1){
 			printf("Quotes mismatch\n");
 		} else {
-			cleanString(parser, input);
 			commandnum = splitCommands(parser, input, commandArray);
 			if(commandnum != 0){
 				int i;
 				for(i=0; i<commandnum; i++){
-					argnum = parseCommand(parser, commandArray[i], args);
+					argnum = parseCommand(parser, commandArray[i], args, pipeOrRedirect);
 					bool shellCommand = (strcmp("exit", args[0]) == 0 || strcmp("cd", args[0]) == 0 || strcmp("prompt", args[0]) == 0);
 					if(shellCommand)
 						break;
 					if(strcmp(args[0], "") != 0){
-						executeCommand(args);
+						executeCommand(args, argnum, pipeOrRedirect);
 					}
 				}
 
