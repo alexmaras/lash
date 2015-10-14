@@ -11,8 +11,8 @@
 #include <readline/history.h>
 #include <linux/limits.h>
 
-#include "lash.h"
 #include "lashparser.h"
+#include "lash.h"
 
 #define MAXPROMPT 40
 
@@ -26,27 +26,71 @@ static int maxarglength;
 static int maxpromptlength;
 
 
-void executeCommand(char **args, int argnum, int *pipeOrRedirect){
-	runningPid = fork();
-	if(runningPid == -1){
-		printf("for error: %s\n", strerror(errno));
-		return;
+bool executeCommand(struct LashParser *parser){
+	int i;
+	printf("num of comms: %d\n", parser->commandNum);
+	for(i = 0; i < parser->commandNum; i++){
+		struct Command *command = parser->commands[i];
+		bool shellCommand = (strcmp("exit", command->args[0]) == 0 || strcmp("cd", command->args[0]) == 0 || strcmp("prompt", command->args[0]) == 0);
+		if(shellCommand){
+			if(strcmp("exit", command->args[0]) == 0){
+				return false;
+			}
+			if(strcmp("cd", command->args[0]) == 0){
+				if(command->argNum == 1){
+					chdir(getenv("HOME"));
+				} else {
+					char *path = malloc(parser->maxinput);
+					strcpy(path, command->args[1]);
+					if(command->args[1][0] == '~'){
+						strcpy(path, getenv("HOME"));
+						char *buffer = malloc(sizeof(char) * parser->maxinput);
+						memcpy(buffer, &(command->args[1][1]), strlen(command->args[1])-1);
+						strcat(path, buffer);
+						free(buffer);
+					}
+					int status = chdir(path);
+					char *error = strerror(errno);
+					free(path);
+					if(status == -1)
+						printf("%s\n", error);
+				}
+			}
+			if(strcmp("prompt", command->args[0]) == 0){
+				if(command->argNum == 1)
+					printf("No prompt given\n");
+				else {
+					if(strlen(command->args[1]) > maxpromptlength-1){
+						printf("The prompt can only be %d characters long\n", maxpromptlength);
+					}
+					else {
+						strcpy(prompt, command->args[1]);
+						strcat(prompt, " ");
+					}
+				}
+			}
+		}
+		else if(strcmp(command->args[0], "") != 0){
+			runningPid = fork();
+			if(runningPid == -1){
+				printf("for error: %s\n", strerror(errno));
+			}
+			else if(runningPid == 0){
+				// child process
+				execvp(command->args[0], command->args);
+				char* error = strerror(errno);
+				printf("LaSH: %s: %s\n", command->args[0], error);
+				exit(1);
+			} else {
+				// parent process
+				int commandStatus;
+				acceptInterrupt = true;
+				waitpid(runningPid, &commandStatus, 0);
+				acceptInterrupt = false;
+			}
+		}
 	}
-	else if(runningPid == 0){
-		// child process
-		execvp(args[0], args);
-
-		char* error = strerror(errno);
-		printf("LaSH: %s: %s\n", args[0], error);
-		exit(1);
-	} else {
-		// parent process
-		int commandStatus;
-		acceptInterrupt = true;
-		waitpid(runningPid, &commandStatus, 0);
-		acceptInterrupt = false;
-		return;
-	}
+	return true;
 }
 
 void emptyArray(char **array, int length){
@@ -87,81 +131,24 @@ void runLash(int command, int args, int arglength, int promptlength){
 
 	stifle_history(100);
 
-	struct LashParser *parser = newLashParser(maxcommands, maxargs, maxarglength);
+	struct LashParser *lash = newLashParser(maxcommands, maxargs, maxarglength);
+
 
 	printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
 
 	// Loop forever. This will be broken if exit is run
-    while(1){
+	bool cont = true;
+    while(cont){
 		acceptInterrupt = false;
-		char *commandArray[maxcommands];
-		char *args[maxargs];
-		int  pipeOrRedirect[maxargs];
 
         char *input = readline(prompt);
 		if(strcmp(input, "") != 0){
 	        add_history(input);
 		}
-
-		int argnum = 0;
-		int commandnum = 0;
-		int quotes[maxcommands][3];
-		int numberOfQuotes = findQuoteLocations(input, quotes);
-
-		if(numberOfQuotes == -1){
-			printf("Quotes mismatch\n");
-		} else {
-			commandnum = splitCommands(parser, input, commandArray);
-			if(commandnum != 0){
-				int i;
-				for(i=0; i<commandnum; i++){
-					argnum = parseCommand(parser, commandArray[i], args, pipeOrRedirect);
-					bool shellCommand = (strcmp("exit", args[0]) == 0 || strcmp("cd", args[0]) == 0 || strcmp("prompt", args[0]) == 0);
-					if(shellCommand)
-						break;
-					if(strcmp(args[0], "") != 0){
-						executeCommand(args, argnum, pipeOrRedirect);
-					}
-				}
-
-				if(strcmp("exit", args[0]) == 0)
-					break;
-				if(strcmp("cd", args[0]) == 0){
-					if(argnum == 1){
-						chdir(getenv("HOME"));
-					} else {
-						char path[PATH_MAX] = "";
-						strcpy(path, args[1]);
-						if(args[1][0] == '~'){
-							strcpy(path, getenv("HOME"));
-							char buffer[PATH_MAX] = "";
-							memcpy(buffer, &args[1][1], strlen(args[1])-1);
-							strcat(path, buffer);
-						}
-						int status = chdir(path);
-						char *error = strerror(errno);
-						if(status == -1)
-							printf("%s\n", error);
-					}
-				}
-				if(strcmp("prompt", args[0]) == 0){
-					if(argnum == 1)
-						printf("No prompt given\n");
-					else {
-						if(strlen(args[1]) > maxpromptlength-1){
-							printf("The prompt can only be %d characters long\n", maxpromptlength);
-						}
-						else {
-							strcpy(prompt, args[1]);
-							strcat(prompt, " ");
-						}
-					}
-				}
-			}
-		}
+		buildCommand(lash, input);
+		cont = executeCommand(lash);
         free(input);
-		emptyArray(commandArray, commandnum);
-		emptyArray(args, argnum);
+		clearParser(lash);
     }
 
     exit(0);

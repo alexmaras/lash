@@ -5,12 +5,13 @@
 
 #include "lashparser.h"
 
-struct LashParser{
-	int maxcommands;
-	int maxargs;
-	int maxarglength;
-	int maxinput;
-};
+struct Command *newCommand(struct LashParser *parser){
+	struct Command *newCommand = (struct Command *)malloc(sizeof(struct Command));
+	newCommand->args = malloc(sizeof(char) * parser->maxargs);
+	newCommand->pipeOrRedirect = malloc(sizeof(int) * parser->maxargs);
+	newCommand->argNum = 0;
+	return newCommand;
+}
 
 struct LashParser *newLashParser(int commands, int args, int arglength){
 	struct LashParser *parser = (struct LashParser *)malloc(sizeof(struct LashParser));
@@ -19,7 +20,24 @@ struct LashParser *newLashParser(int commands, int args, int arglength){
 	parser->maxarglength = arglength;
 	parser->maxinput = commands * args * arglength;
 
+	parser->commands = malloc(sizeof(struct Command) * commands);
+
 	return parser;
+}
+
+void clearParser(struct LashParser *parser){
+	int i;
+	int j;
+	for(i = 0; i < parser->commandNum; i++){
+		for(j = 0; j < parser->commands[i]->argNum; j++){
+			free(parser->commands[i]->args[j]);
+		}
+		free(parser->commands[i]->pipeOrRedirect);
+		free(parser->commands[i]->command);
+		free(parser->commands[i]->args);
+		free(parser->commands[i]);
+	}
+
 }
 
 bool isEscaped(char *line, int index){
@@ -243,7 +261,8 @@ int copyString(char *copyTo, char *copyFrom, int startAt, int endAt){
 }
 
 
-int parseCommand(struct LashParser *parser, char *command, char **args, int *pipeOrRedirect){
+int parseCommand(struct LashParser *parser, struct Command *commData){
+	char *command = commData->command;
 
 	// Get the quote locations for the current command
 	int quotes[parser->maxcommands][3];
@@ -263,14 +282,6 @@ int parseCommand(struct LashParser *parser, char *command, char **args, int *pip
 	pipenum = findPipes(parser, command, pipeIndexes);
 	redirectnum = findRedirects(parser, command, redirectIndexes);
 	printf("redirects: %d\npipes: %d\n", redirectnum, pipenum);
-/*
-	int k = 0;
-	for(k = 0; k < pipenum; k++)
-		printf("pipenum: %d\n", pipeIndexes[k]);
-
-    for(k = 0; k < redirectnum; k++)
-        printf("redirect: %d, %d\n", redirectIndexes[k][0], redirectIndexes[k][1]);
-*/
 	printf("command: %s\n", command);
     for(i = 0; i < strlen(command); i++){
 		currentChar = command[i];
@@ -287,26 +298,28 @@ int parseCommand(struct LashParser *parser, char *command, char **args, int *pip
 				!insideQuotes(i, quotes, numberOfQuotePairs)
 			)
 		);
-
 		if(foundBreak){
 			if(currentChar == '|')
-				pipeOrRedirect[argnum] = PIPE;
+				commData->pipeOrRedirect[argnum] = PIPE;
 			else if(currentChar == '<')
-				pipeOrRedirect[argnum] = REDIRECTBACKWARD;
+				commData->pipeOrRedirect[argnum] = REDIRECTBACKWARD;
 			else if(currentChar == '>')
-				pipeOrRedirect[argnum] = REDIRECTFORWARD;
+				commData->pipeOrRedirect[argnum] = REDIRECTFORWARD;
 			else
-				pipeOrRedirect[argnum] = 0;
+				commData->pipeOrRedirect[argnum] = 0;
 
-			printf("pipe/redir: %d\n", pipeOrRedirect[argnum]);
-			args[argnum] = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
-			copyIndex = copyString(args[argnum], command, copyIndex, ( lastChar ? i+1 : i));
-	        stripStartAndEndSpacesAndSemiColons(args[argnum]);
-			removeEscapeSlashesAndQuotes(parser, args[argnum]);
+			printf("pipe/redir: %d\n", commData->pipeOrRedirect[argnum]);
+			commData->args[argnum] = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
+
+			copyIndex = copyString(commData->args[argnum], command, copyIndex, ( lastChar ? i+1 : i));
+	        stripStartAndEndSpacesAndSemiColons(commData->args[argnum]);
+			removeEscapeSlashesAndQuotes(parser, commData->args[argnum]);
+
             argnum++;
-            //copyIndex++;
+			commData->args[argnum] = NULL; // Make sure final arg is always NULL so that execvp handles it correctly
         }
     }
+	commData->argNum = argnum;
 	//free(tempString);
 	return argnum;
 }
@@ -328,7 +341,7 @@ int foundPipeOrRedirect(int index, int *pipes, int pipenum, int redirects[][2], 
 	return 0;
 }
 
-int splitCommands(struct LashParser *parser, char *line, char **commands){
+int splitCommands(struct LashParser *parser, char *line){
 
 	cleanString(parser, line);
 
@@ -353,11 +366,13 @@ int splitCommands(struct LashParser *parser, char *line, char **commands){
             }
             tempString[j] = '\0';
             cleanString(parser, tempString);
-            commands[commandnum] = tempString;
+			parser->commands[commandnum] = newCommand(parser);
+            parser->commands[commandnum]->command = tempString;
             commandnum++;
             copyIndex++;
         }
     }
+	parser->commandNum = commandnum;
 	return commandnum;
 }
 
@@ -439,3 +454,21 @@ int findQuoteLocations(char *line, int quotes[][3]){
     }
     return quoteIndex;
 }
+
+
+void buildCommand(struct LashParser *parser, char *line){
+	int quotes[parser->maxcommands][3];
+	int numberOfQuotes = findQuoteLocations(line, quotes);
+	if(numberOfQuotes == -1){
+		printf("Quotes mismatch\n");
+	} else {
+		splitCommands(parser, line);
+		if(parser->commandNum != 0){
+			int i;
+			for(i = 0; i < parser->commandNum; i++){
+				parseCommand(parser, parser->commands[i]);
+			}
+		}
+	}
+}
+

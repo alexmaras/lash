@@ -1,8 +1,11 @@
 #ifndef LASH_H_
 #define LASH_H_
 
+#include <stdbool.h>
+#include "lashparser.h"
+
 void emptyArray(char **array, int length);
-void executeCommand(char **args, int argnum, int *pipeOrRedirect);
+bool executeCommand(struct LashParser *parser);
 void sighandler(int signum);
 void runLash();
 
