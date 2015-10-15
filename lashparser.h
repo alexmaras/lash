@@ -7,10 +7,15 @@
 #define REDIRECTBACKWARD 2
 #define REDIRECTFORWARD 3
 
+#define QUOTE_MISMATCH -1
+#define VALID 1
+#define NO_ARGS 0
+
+
 struct Command{
 	char *command;
 	char **args;
-	int *pipeOrRedirect;
+	char symbolAfter;
 
 	int argNum;
 };
@@ -42,7 +47,7 @@ bool followedBySemiColon(char *line, int index);
 bool indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex);
 int  insideQuotes(int index, int quotes[][3], int numberOfQuotePairs);
 bool isEscaped(char *line, int index);
-int  parseCommand(struct LashParser *parser, struct Command *commData);
+int  parseCommand(struct LashParser *parser, struct Command *commData, int commandIndex);
 void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
 void sighandler(int signum);
 int  splitCommands(struct LashParser *parser, char *line);
@@ -50,5 +55,5 @@ void stripStartAndEndSpacesAndSemiColons(char *line);
 int  findPipes(struct LashParser *parser, char *line, int *pipeIndexes);
 int  findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2]);
 int foundPipeOrRedirect(int index, int *pipes, int pipenum, int redirects[][2], int redirectnum);
-void buildCommand(struct LashParser *parser, char *line);
+int buildCommand(struct LashParser *parser, char *line);
 #endif

@@ -77,6 +77,7 @@ bool executeCommand(struct LashParser *parser){
 			}
 			else if(runningPid == 0){
 				// child process
+				printf("nextchar: %c\n", command->symbolAfter);
 				execvp(command->args[0], command->args);
 				char* error = strerror(errno);
 				printf("LaSH: %s: %s\n", command->args[0], error);
@@ -134,10 +135,11 @@ void runLash(int command, int args, int arglength, int promptlength){
 	struct LashParser *lash = newLashParser(maxcommands, maxargs, maxarglength);
 
 
-	printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
+	//printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
 
 	// Loop forever. This will be broken if exit is run
 	bool cont = true;
+	int status;
     while(cont){
 		acceptInterrupt = false;
 
@@ -145,8 +147,13 @@ void runLash(int command, int args, int arglength, int promptlength){
 		if(strcmp(input, "") != 0){
 	        add_history(input);
 		}
-		buildCommand(lash, input);
-		cont = executeCommand(lash);
+		status = buildCommand(lash, input);
+
+		if(status == VALID)
+			cont = executeCommand(lash);
+		else if(status == QUOTE_MISMATCH)
+			printf("Error: Quote Mismatch\n");
+
         free(input);
 		clearParser(lash);
     }
