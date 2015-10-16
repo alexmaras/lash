@@ -25,6 +25,68 @@ static int maxargs;
 static int maxarglength;
 static int maxpromptlength;
 
+bool runShellCommand(struct LashParser *parser, struct Command *command){
+	if(strcmp("exit", command->args[0]) == 0){
+		return false;
+	}
+	if(strcmp("cd", command->args[0]) == 0){
+		if(command->argNum == 1){
+			chdir(getenv("HOME"));
+		} else {
+			char *path = malloc(parser->maxinput);
+			strcpy(path, command->args[1]);
+			if(command->args[1][0] == '~'){
+				strcpy(path, getenv("HOME"));
+				char *buffer = malloc(sizeof(char) * parser->maxinput);
+				memcpy(buffer, &(command->args[1][1]), strlen(command->args[1])-1);
+				strcat(path, buffer);
+				free(buffer);
+			}
+			int status = chdir(path);
+			char *error = strerror(errno);
+			free(path);
+			if(status == -1)
+				printf("%s\n", error);
+		}
+	}
+	if(strcmp("prompt", command->args[0]) == 0){
+		if(command->argNum == 1)
+			printf("No prompt given\n");
+		else {
+			if(strlen(command->args[1]) > maxpromptlength-1){
+				printf("The prompt can only be %d characters long\n", maxpromptlength);
+			}
+			else {
+				strcpy(prompt, command->args[1]);
+				strcat(prompt, " ");
+			}
+		}
+	}
+	return true;
+}
+
+
+void runCommand(struct Command *command){
+	runningPid = fork();
+	if(runningPid == -1){
+		printf("for error: %s\n", strerror(errno));
+	}
+	else if(runningPid == 0){
+		// child process
+		printf("nextchar: %c\n", command->symbolAfter);
+		printf("redirects: in: %s, out: %s\n", command->redirectIn, command->redirectOut);
+		execvp(command->args[0], command->args);
+		char* error = strerror(errno);
+		printf("LaSH: %s: %s\n", command->args[0], error);
+		exit(1);
+	} else {
+		// parent process
+		int commandStatus;
+		acceptInterrupt = true;
+		waitpid(runningPid, &commandStatus, 0);
+		acceptInterrupt = false;
+	}
+}
 
 bool executeCommand(struct LashParser *parser){
 	int i;
@@ -33,62 +95,10 @@ bool executeCommand(struct LashParser *parser){
 		struct Command *command = parser->commands[i];
 		bool shellCommand = (strcmp("exit", command->args[0]) == 0 || strcmp("cd", command->args[0]) == 0 || strcmp("prompt", command->args[0]) == 0);
 		if(shellCommand){
-			if(strcmp("exit", command->args[0]) == 0){
-				return false;
-			}
-			if(strcmp("cd", command->args[0]) == 0){
-				if(command->argNum == 1){
-					chdir(getenv("HOME"));
-				} else {
-					char *path = malloc(parser->maxinput);
-					strcpy(path, command->args[1]);
-					if(command->args[1][0] == '~'){
-						strcpy(path, getenv("HOME"));
-						char *buffer = malloc(sizeof(char) * parser->maxinput);
-						memcpy(buffer, &(command->args[1][1]), strlen(command->args[1])-1);
-						strcat(path, buffer);
-						free(buffer);
-					}
-					int status = chdir(path);
-					char *error = strerror(errno);
-					free(path);
-					if(status == -1)
-						printf("%s\n", error);
-				}
-			}
-			if(strcmp("prompt", command->args[0]) == 0){
-				if(command->argNum == 1)
-					printf("No prompt given\n");
-				else {
-					if(strlen(command->args[1]) > maxpromptlength-1){
-						printf("The prompt can only be %d characters long\n", maxpromptlength);
-					}
-					else {
-						strcpy(prompt, command->args[1]);
-						strcat(prompt, " ");
-					}
-				}
-			}
+			return runShellCommand(parser, command);
 		}
 		else if(strcmp(command->args[0], "") != 0){
-			runningPid = fork();
-			if(runningPid == -1){
-				printf("for error: %s\n", strerror(errno));
-			}
-			else if(runningPid == 0){
-				// child process
-				printf("nextchar: %c\n", command->symbolAfter);
-				execvp(command->args[0], command->args);
-				char* error = strerror(errno);
-				printf("LaSH: %s: %s\n", command->args[0], error);
-				exit(1);
-			} else {
-				// parent process
-				int commandStatus;
-				acceptInterrupt = true;
-				waitpid(runningPid, &commandStatus, 0);
-				acceptInterrupt = false;
-			}
+			runCommand(command);
 		}
 	}
 	return true;
@@ -157,6 +167,9 @@ void runLash(int command, int args, int arglength, int promptlength){
         free(input);
 		clearParser(lash);
     }
+
+	free(lash->commands);
+	free(lash);
 
     exit(0);
 }

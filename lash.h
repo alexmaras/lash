@@ -8,5 +8,8 @@ void emptyArray(char **array, int length);
 bool executeCommand(struct LashParser *parser);
 void sighandler(int signum);
 void runLash();
+bool runShellCommand(struct LashParser *parser, struct Command *command);
+void runCommand(struct Command *command);
+
 
 #endif

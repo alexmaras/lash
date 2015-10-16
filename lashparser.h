@@ -17,6 +17,8 @@ struct Command{
 	char **args;
 	char symbolAfter;
 
+	char *redirectIn;
+	char *redirectOut;
 	int argNum;
 };
 
@@ -28,8 +30,6 @@ struct LashParser {
 
 	struct Command **commands;
 
-    //char **commands;
-    //char **args;
 
 	int commandNum;
 };

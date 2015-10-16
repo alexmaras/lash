@@ -6,10 +6,14 @@
 #include "lashparser.h"
 
 struct Command *newCommand(struct LashParser *parser){
+
 	struct Command *newCommand = (struct Command *)malloc(sizeof(struct Command));
 	newCommand->args = malloc(sizeof(char) * parser->maxargs);
+
 	newCommand->symbolAfter = ' ';
 	newCommand->argNum = 0;
+	newCommand->redirectIn = NULL;
+	newCommand->redirectOut = NULL;
 	return newCommand;
 }
 
@@ -34,6 +38,12 @@ void clearParser(struct LashParser *parser){
 		}
 		free(parser->commands[i]->command);
 		free(parser->commands[i]->args);
+		if(parser->commands[i]->redirectIn != NULL){
+			free(parser->commands[i]->redirectIn);
+		}
+		if(parser->commands[i]->redirectOut != NULL){
+			free(parser->commands[i]->redirectOut);
+		}
 		free(parser->commands[i]);
 	}
 
@@ -102,7 +112,7 @@ void stripStartAndEndSpacesAndSemiColons(char *line){
 	int j = 0;
 	int i = 0;
 
-	char *newline = (char*) malloc( length );
+	char *newline = (char*) malloc( length+1 );
 
 	for(i = 0; i<length; i++){
 		if(!(line[i] == ';' &&
@@ -226,7 +236,6 @@ void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line){
 		// keeps both backlashes after smelly as they are within enclosing quotes
 		// keeps the final double quote as it is escaped
 		//
-		// Note that currently, double escaping backslashes before a quote will count as the quote being escaped.
 		bool copyCharacter = (
 			!enclosingQuote &&
 			(
@@ -272,7 +281,7 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 	int redirectnum = 0;
 	int pipeIndexes[parser->maxargs];
 	int redirectIndexes[parser->maxargs][2];
-
+	int captureRedirect = 0;
     char currentChar;
 	pipenum = findPipes(parser, command, pipeIndexes);
 	redirectnum = findRedirects(parser, command, redirectIndexes);
@@ -294,40 +303,39 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 			)
 		);
 		if(foundBreak){
-			//commData->symbolAfter = lastChar ? ';' : currentChar;
+			char *tempString = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
 
-			//printf("pipe/redir: %c\n", commData->symbolAfter);
-			commData->args[argnum] = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
+			copyIndex = copyString(tempString, command, copyIndex, ( lastChar ? i+1 : i));
+			stripStartAndEndSpacesAndSemiColons(tempString);
+			removeEscapeSlashesAndQuotes(parser, tempString);
 
-			copyIndex = copyString(commData->args[argnum], command, copyIndex, ( lastChar ? i+1 : i));
-	        stripStartAndEndSpacesAndSemiColons(commData->args[argnum]);
-			removeEscapeSlashesAndQuotes(parser, commData->args[argnum]);
-
-            argnum++;
-			commData->argNum = argnum;
-			commData->args[argnum] = NULL; // Make sure final arg is always NULL so that execvp handles it correctly
-        }
-/*
-		if(currentChar == '|' || currentChar == '<' || currentChar == '>'){
-			//newcommand
-			struct Command *newcommand = newCommand(parser);
-			char *tempString = (char*) malloc(parser->maxinput);
-			copyString(tempString, command, copyIndex, strlen(command));
-			cleanString(parser, tempString);
-			newcommand->command = tempString;
-			struct Command *tempCommand;
-			struct Command *tempCommand2 = newcommand;
-			int k;
-			for(k = commandIndex+1; k <= parser->commandNum; k++){
-				tempCommand = parser->commands[k];
-				parser->commands[k] = tempCommand2;
-				tempCommand2 = tempCommand;
+			if(captureRedirect == 1){
+				if(commData->redirectIn != NULL)
+					free(commData->redirectIn);
+				commData->redirectIn = tempString;
+			} else if(captureRedirect == 2){
+				if(commData->redirectOut != NULL)
+					free(commData->redirectOut);
+				commData->redirectOut = tempString;
+			} else {
+				commData->args[argnum] = tempString;
+				argnum++;
+				commData->argNum = argnum;
+				commData->args[argnum] = NULL; // Make sure final arg is always NULL so that execvp handles it correctly
 			}
-			parser->commandNum = parser->commandNum + 1;
-			return argnum;
-		}*/
+			switch(currentChar){
+				case '<':
+					captureRedirect = 1;
+					break;
+				case '>':
+					captureRedirect = 2;
+					break;
+				default:
+					captureRedirect = 0;
+					break;
+			}
+        }
     }
-	//free(tempString);
 	return argnum;
 }
 
@@ -363,7 +371,7 @@ int splitCommands(struct LashParser *parser, char *line){
     for(i = 0; i < strlen(line); i++){
         bool lastChar = (i == strlen(line)-1);
         currentChar = line[i];
-        if(lastChar || ((currentChar == '&' || currentChar == ';' || currentChar == '<' || currentChar == '>' || currentChar == '|') && !followedBySemiColon(line, i) && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs))){
+        if(lastChar || ((currentChar == '&' || currentChar == ';' || currentChar == '|') && !followedBySemiColon(line, i) && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs))){
             char *tempString = (char*) malloc(parser->maxinput);
             int j = 0;
             while((copyIndex < i && !lastChar) || (copyIndex <= i && lastChar)){
