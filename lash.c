@@ -66,31 +66,55 @@ bool runShellCommand(struct LashParser *parser, struct Command *command){
 }
 
 
-void runCommand(struct Command *command){
+int runCommand(struct Command *command, int input){
+	int fd[2];
+	fd[0] = STDIN_FILENO;
+	fd[1] = STDOUT_FILENO;
+	//char readbuffer[80];
+	if(command->symbolAfter == '|'){
+		pipe(fd);
+	}
+
 	runningPid = fork();
 	if(runningPid == -1){
 		printf("for error: %s\n", strerror(errno));
 	}
 	else if(runningPid == 0){
 		// child process
-		printf("nextchar: %c\n", command->symbolAfter);
-		printf("redirects: in: %s, out: %s\n", command->redirectIn, command->redirectOut);
+
+
+		//printf("nextchar: %c\n", command->symbolAfter);
+		//printf("redirects: in: %s, out: %s\n", command->redirectIn, command->redirectOut);
+		//printf("file desc: %d, %d\n", input, fd[1]);
+		//printf("stdout: %d. stdin: %d\n", STDOUT_FILENO, STDIN_FILENO);
+
+		if(fd[1] != STDOUT_FILENO){
+			dup2(fd[1], STDOUT_FILENO);
+		}
+		if(input != STDIN_FILENO){
+			dup2(input, STDIN_FILENO);
+		}
+
 		execvp(command->args[0], command->args);
 		char* error = strerror(errno);
 		printf("LaSH: %s: %s\n", command->args[0], error);
 		exit(1);
 	} else {
+		if(fd[1] != STDOUT_FILENO)
+			close(fd[1]);
 		// parent process
 		int commandStatus;
 		acceptInterrupt = true;
 		waitpid(runningPid, &commandStatus, 0);
 		acceptInterrupt = false;
+		//printf("finished!\n");
 	}
+	return fd[0];
 }
 
 bool executeCommand(struct LashParser *parser){
 	int i;
-	printf("num of comms: %d\n", parser->commandNum);
+	int nextinput = 0;
 	for(i = 0; i < parser->commandNum; i++){
 		struct Command *command = parser->commands[i];
 		bool shellCommand = (strcmp("exit", command->args[0]) == 0 || strcmp("cd", command->args[0]) == 0 || strcmp("prompt", command->args[0]) == 0);
@@ -98,7 +122,7 @@ bool executeCommand(struct LashParser *parser){
 			return runShellCommand(parser, command);
 		}
 		else if(strcmp(command->args[0], "") != 0){
-			runCommand(command);
+			nextinput = runCommand(command, nextinput);
 		}
 	}
 	return true;
