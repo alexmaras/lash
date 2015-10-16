@@ -130,7 +130,7 @@ void runLash(int command, int args, int arglength, int promptlength){
 	maxarglength    = arglength;
 	maxpromptlength = promptlength;
 
-	sprintf(prompt, "\x1b[32m%s LaSH %% \x1b[0m", getenv("USER"));
+	sprintf(prompt, "%s LaSH %% ", getenv("USER"));
 
     // ignore all signals that should be passed to jobs
     signal (SIGINT, sighandler);
