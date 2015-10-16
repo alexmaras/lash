@@ -9,7 +9,7 @@ bool executeCommand(struct LashParser *parser);
 void sighandler(int signum);
 void runLash();
 bool runShellCommand(struct LashParser *parser, struct Command *command);
-void runCommand(struct Command *command);
+int runCommand(struct Command *command, int input);
 
 
 #endif

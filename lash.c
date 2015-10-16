@@ -70,23 +70,15 @@ int runCommand(struct Command *command, int input){
 	int fd[2];
 	fd[0] = STDIN_FILENO;
 	fd[1] = STDOUT_FILENO;
-	//char readbuffer[80];
 	if(command->symbolAfter == '|'){
 		pipe(fd);
 	}
-
 	runningPid = fork();
 	if(runningPid == -1){
 		printf("for error: %s\n", strerror(errno));
 	}
 	else if(runningPid == 0){
 		// child process
-
-
-		//printf("nextchar: %c\n", command->symbolAfter);
-		//printf("redirects: in: %s, out: %s\n", command->redirectIn, command->redirectOut);
-		//printf("file desc: %d, %d\n", input, fd[1]);
-		//printf("stdout: %d. stdin: %d\n", STDOUT_FILENO, STDIN_FILENO);
 
 		if(fd[1] != STDOUT_FILENO){
 			dup2(fd[1], STDOUT_FILENO);
@@ -107,7 +99,9 @@ int runCommand(struct Command *command, int input){
 		acceptInterrupt = true;
 		waitpid(runningPid, &commandStatus, 0);
 		acceptInterrupt = false;
-		//printf("finished!\n");
+		if(input != STDIN_FILENO){
+			close(input);
+		}
 	}
 	return fd[0];
 }
@@ -140,7 +134,6 @@ void sighandler(int signum){
     if(signum == SIGINT){
 		if(acceptInterrupt)
 			kill(runningPid, SIGINT);
-        //kill(runningPid, SIGINT);
     }
 	rl_free_line_state();
 	rl_cleanup_after_signal();
