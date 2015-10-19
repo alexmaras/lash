@@ -1,5 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
+#include <glob.h>
+
+//#include <stdio.h>
 
 #include "lashparser.h"
 
@@ -273,16 +276,40 @@ int copyString(char *copyTo, const char *copyFrom, int startAt, const int endAt)
 }
 
 void replaceTilde(struct LashParser *parser, char *line){
-	char *tempString = malloc(sizeof(char) * parser->maxinput);
 	if(line[0] == '~'){
-		strcpy(tempString, getenv("HOME"));
+		char *tempString = malloc(sizeof(char) * parser->maxinput);
 		char *buffer = malloc(sizeof(char) * parser->maxinput);
+
+		strcpy(tempString, getenv("HOME"));
 		memcpy(buffer, &(line[1]), strlen(line)-1);
 		strcat(tempString, buffer);
-		free(buffer);
 		strcpy(line, tempString);
+
+		free(buffer);
+		free(tempString);
 	}
-	free(tempString);
+}
+
+glob_t * expandWildcards(struct LashParser *parser, char *line){
+	int quotes[parser->maxcommands][3];
+	int numberOfQuotePairs = findQuoteLocations(line, quotes);
+
+	int length = strlen(line);
+	int i;
+	int runglob = 0;
+	for(i = 0; i < length; i++){
+		if((line[i] == '*' || line[i] == '?') && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs)){
+			runglob = 1;
+		}
+	}
+
+	glob_t *globbuf = (glob_t*)malloc(sizeof(glob_t));
+	if(runglob){
+		glob(line, 0, NULL, globbuf);
+	} else {
+		globbuf->gl_pathc = 0;
+	}
+	return globbuf;
 }
 
 int parseCommand(struct LashParser *parser, struct Command *commData, int commandIndex){
@@ -317,8 +344,9 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 
 			copyIndex = copyString(tempString, command, copyIndex, ( lastChar ? i+1 : i));
 			stripStartAndEndSpacesAndEndingSymbols(tempString);
-			removeEscapeSlashesAndQuotes(parser, tempString);
 			replaceTilde(parser, tempString);
+			glob_t *globbed = expandWildcards(parser, tempString);
+			removeEscapeSlashesAndQuotes(parser, tempString);
 
 			if(captureRedirect == 1){
 				if(commData->redirectIn != NULL)
@@ -329,10 +357,24 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 					free(commData->redirectOut);
 				commData->redirectOut = tempString;
 			} else if(strlen(tempString) > 0){
-				commData->args[argnum] = tempString;
-				argnum++;
-				commData->argNum = argnum;
-				commData->args[argnum] = NULL; // Make sure final arg is always NULL so that execvp handles it correctly
+				if(globbed->gl_pathc == 0){
+					commData->args[argnum] = tempString;
+					argnum++;
+					commData->argNum = argnum;
+					commData->args[argnum] = NULL; // Make sure final arg is always NULL so that execvp handles it correctly
+					free(globbed);
+				} else {
+					int j;
+					free(tempString);
+					for(j = 0; j < globbed->gl_pathc; j++){
+						commData->args[argnum] = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
+						strcpy(commData->args[argnum],  globbed->gl_pathv[j]);
+						argnum++;
+						commData->argNum = argnum;
+					}
+					commData->args[argnum] = NULL;
+					globfree(globbed);
+				}
 			}
 			switch(currentChar){
 				case '<':

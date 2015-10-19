@@ -1,6 +1,8 @@
 #ifndef LASHPARSER_H_
 #define LASHPARSER_H_
 
+#include <glob.h>
+
 #define QUOTE_MISMATCH -1
 #define VALID 1
 #define NO_ARGS 0
@@ -46,6 +48,7 @@ int followedBySemiColonOrAmpersand(const char *line, const int index);
 int  copyString(char *copyTo, const char *copyFrom, int startAt, const int endAt);
 void cleanString(struct LashParser *parser, char *line);
 void replaceTilde(struct LashParser *parser, char *line);
+glob_t * expandWildcards(struct LashParser *parser, char *line);
 void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
 void stripStartAndEndSpacesAndEndingSymbols(char *line);
 
