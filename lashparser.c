@@ -58,12 +58,12 @@ bool isEscaped(char *line, int index){
     return false;
 }
 
-bool followedBySemiColon(char *line, int index){
+bool followedBySemiColonOrAmpersand(char *line, int index){
     int i = index+1;
     while(line[i] == ' '){
         i++;
     }
-    if(line[i] == ';'){
+    if(line[i] == ';' || line[i] == '&'){
         return true;
     }
 
@@ -107,7 +107,7 @@ bool atEnd(int index, char *line){
 
 
 
-void stripStartAndEndSpacesAndSemiColons(char *line){
+void stripStartAndEndSpacesAndEndingSymbols(char *line){
 	int length = strlen(line);
 	int j = 0;
 	int i = 0;
@@ -128,7 +128,13 @@ void stripStartAndEndSpacesAndSemiColons(char *line){
 			        (atEnd(i, line))    	// space at end
 			    )
             )
-
+			&&
+			!(line[i] == '&' &&
+                (
+			        (atStart(i, line)) ||	// space at start
+			        (atEnd(i, line))    	// space at end
+			    )
+            )
 		){
 			newline[j] = line[i];
 			j++;
@@ -306,7 +312,7 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 			char *tempString = (char*) malloc( (int)(parser->maxarglength * sizeof(char)));
 
 			copyIndex = copyString(tempString, command, copyIndex, ( lastChar ? i+1 : i));
-			stripStartAndEndSpacesAndSemiColons(tempString);
+			stripStartAndEndSpacesAndEndingSymbols(tempString);
 			removeEscapeSlashesAndQuotes(parser, tempString);
 
 			if(captureRedirect == 1){
@@ -317,7 +323,7 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 				if(commData->redirectOut != NULL)
 					free(commData->redirectOut);
 				commData->redirectOut = tempString;
-			} else {
+			} else if(strlen(tempString) > 0){
 				commData->args[argnum] = tempString;
 				argnum++;
 				commData->argNum = argnum;
@@ -371,7 +377,7 @@ int splitCommands(struct LashParser *parser, char *line){
     for(i = 0; i < strlen(line); i++){
         bool lastChar = (i == strlen(line)-1);
         currentChar = line[i];
-        if(lastChar || ((currentChar == '&' || currentChar == ';' || currentChar == '|') && !followedBySemiColon(line, i) && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs))){
+        if(lastChar || ((currentChar == '&' || currentChar == ';' || currentChar == '|') && !followedBySemiColonOrAmpersand(line, i) && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs))){
             char *tempString = (char*) malloc(parser->maxinput);
             int j = 0;
             while((copyIndex < i && !lastChar) || (copyIndex <= i && lastChar)){
@@ -383,7 +389,7 @@ int splitCommands(struct LashParser *parser, char *line){
             cleanString(parser, tempString);
 			parser->commands[commandnum] = newCommand(parser);
             parser->commands[commandnum]->command = tempString;
-			parser->commands[commandnum]->symbolAfter = (lastChar ? ';' : currentChar);
+			parser->commands[commandnum]->symbolAfter = (lastChar && currentChar != '&' ? ';' : currentChar);
             commandnum++;
             copyIndex++;
         }

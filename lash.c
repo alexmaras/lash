@@ -75,6 +75,10 @@ int runCommand(struct Command *command, int input){
 	int pipeout = 0;
 	int background = 0;
 
+
+	//-------------------------------------------------
+	//   Evaluate the redirects and pipes
+	//-------------------------------------------------
 	if(command->redirectOut != NULL){
 		redirectOut = creat(command->redirectOut, 0644);
 	}
@@ -88,6 +92,9 @@ int runCommand(struct Command *command, int input){
 	if(command->symbolAfter == '&'){
 		background = 1;
 	}
+	//------------------------------------------------ END
+
+
 	runningPid = fork();
 	if(runningPid < 0){
 		printf("Fork error: %s\n", strerror(errno));

@@ -43,7 +43,7 @@ bool atStart(int index, char *line);
 void cleanString(struct LashParser *parser, char *line);
 int  copyString(char *copyTo, char *copyFrom, int startAt, int endAt);
 int  findQuoteLocations(char *line, int quotes[][3]);
-bool followedBySemiColon(char *line, int index);
+bool followedBySemiColonOrAmpersand(char *line, int index);
 bool indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex);
 int  insideQuotes(int index, int quotes[][3], int numberOfQuotePairs);
 bool isEscaped(char *line, int index);
@@ -51,7 +51,7 @@ int  parseCommand(struct LashParser *parser, struct Command *commData, int comma
 void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
 void sighandler(int signum);
 int  splitCommands(struct LashParser *parser, char *line);
-void stripStartAndEndSpacesAndSemiColons(char *line);
+void stripStartAndEndSpacesAndEndingSymbols(char *line);
 int  findPipes(struct LashParser *parser, char *line, int *pipeIndexes);
 int  findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2]);
 int foundPipeOrRedirect(int index, int *pipes, int pipenum, int redirects[][2], int redirectnum);
