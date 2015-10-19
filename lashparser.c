@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
+#include <stdint.h>
 
 #include "lashparser.h"
 
@@ -49,25 +49,25 @@ void clearParser(struct LashParser *parser){
 
 }
 
-bool isEscaped(char *line, int index){
+int isEscaped(char *line, int index){
 	if(index == 0)
-		return false;
+		return 0;
     if(line[index-1] == '\\' && !isEscaped(line, index-1)){
-        return true;
+        return 1;
     }
-    return false;
+    return 0;
 }
 
-bool followedBySemiColonOrAmpersand(char *line, int index){
+int followedBySemiColonOrAmpersand(char *line, int index){
     int i = index+1;
     while(line[i] == ' '){
         i++;
     }
     if(line[i] == ';' || line[i] == '&'){
-        return true;
+        return 1;
     }
 
-    return false;
+    return 0;
 }
 
 int insideQuotes(int index, int quotes[][3], int numberOfQuotePairs){
@@ -80,29 +80,29 @@ int insideQuotes(int index, int quotes[][3], int numberOfQuotePairs){
     return 0;
 }
 
-bool atStart(int index, char *line){
+int atStart(int index, char *line){
     int ending = 0;
     int i;
 
     for(i = index-1; i >= ending; i--){
         if(line[i] != ' ' && line[i] != ';'){
-            return false;
+            return 0;
         }
     }
-    return true;
+    return 1;
 }
 
 
-bool atEnd(int index, char *line){
+int atEnd(int index, char *line){
     int ending = strlen(line);
     int i;
 
     for(i = index+1; i < ending; i++){
         if(line[i] != ' ' && line[i] != ';'){
-            return false;
+            return 0;
         }
     }
-    return true;
+    return 1;
 }
 
 
@@ -205,7 +205,7 @@ void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line){
 
 	char *tempString = (char*) malloc( parser->maxarglength );
 	int i, k, j = 0, nextchar = -1;
-	bool enclosingQuote;
+	int enclosingQuote;
 
 	for(i = 0; i < strlen(line); i++){
 
@@ -219,10 +219,10 @@ void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line){
 		}
 
 		// if the current character (i) is in the quotes array, it must be removed
-		enclosingQuote = false;
+		enclosingQuote = 0;
 		for(k = 0; k < numberOfQuotePairs; k++){
 			if(quotes[k][0] == i || quotes[k][1] == i)
-				enclosingQuote = true;
+				enclosingQuote = 1;
 		}
 
 		int quoteType = insideQuotes(i, quotes, numberOfQuotePairs);
@@ -242,7 +242,7 @@ void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line){
 		// keeps both backlashes after smelly as they are within enclosing quotes
 		// keeps the final double quote as it is escaped
 		//
-		bool copyCharacter = (
+		int copyCharacter = (
 			!enclosingQuote &&
 			(
 				line[i] != '\\' ||
@@ -295,12 +295,12 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 	//printf("command: %s\n", command);
     for(i = 0; i < strlen(command); i++){
 		currentChar = command[i];
-        bool lastChar = (i == strlen(command)-1);
+        int lastChar = (i == strlen(command)-1);
 
 		// if this is the last character OR:
 		//     the current character is a space that is NOT escaped AND is NOT in quotes
 		// We have found a break and should copy that section into tempString
-		bool foundBreak = (
+		int foundBreak = (
 			lastChar ||
 			(
 				(currentChar == ' ' || currentChar == '|' || currentChar == '<' || currentChar == '>') &&
@@ -375,7 +375,7 @@ int splitCommands(struct LashParser *parser, char *line){
     int copyIndex = 0;
 
     for(i = 0; i < strlen(line); i++){
-        bool lastChar = (i == strlen(line)-1);
+        int lastChar = (i == strlen(line)-1);
         currentChar = line[i];
         if(lastChar || ((currentChar == '&' || currentChar == ';' || currentChar == '|') && !followedBySemiColonOrAmpersand(line, i) && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs))){
             char *tempString = (char*) malloc(parser->maxinput);
@@ -431,30 +431,30 @@ int findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2
     return j;
 }
 
-bool indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex){
+int indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex){
     int index;
     for(index = 0; index < arrayIndex; index++){
         if(array[index][0] == foundCharIndex || array[index][1] == foundCharIndex){
-            return false;
+            return 0;
         }
     }
-    return true;
+    return 1;
 }
 
 int findQuoteLocations(char *line, int quotes[][3]){
     int index, secondIndex, quoteIndex = 0;
     char currentChar = ' ';
     int linelength = strlen(line);
-    bool foundMatch = false;
+    int foundMatch = 0;
 
     for(index = 0; index < linelength; index++){
         currentChar = line[index];
 
         if((currentChar == '\"' || currentChar == '\'') && indexNotInArray(quotes, quoteIndex, index) && !isEscaped(line, index)){
             for(secondIndex = index+1; secondIndex < linelength; secondIndex++){
-                foundMatch = false;
+                foundMatch = 0;
                 if(line[secondIndex] == currentChar && indexNotInArray(quotes, quoteIndex, index) && !isEscaped(line, secondIndex)){
-                    foundMatch = true;
+                    foundMatch = 1;
                     break;
                 }
             }

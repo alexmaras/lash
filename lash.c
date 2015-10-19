@@ -4,11 +4,9 @@
 #include <string.h>
 #include <signal.h>
 #include <errno.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <stdbool.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <linux/limits.h>
@@ -21,7 +19,7 @@
 
 
 pid_t runningPid;
-bool acceptInterrupt;
+int acceptInterrupt;
 char prompt[MAXPROMPT];
 
 static int maxcommands;
@@ -36,9 +34,9 @@ static char *inbuiltCommands[] = {
 	"pwd"
 };
 
-bool runShellCommand(struct LashParser *parser, struct Command *command){
+int runShellCommand(struct LashParser *parser, struct Command *command){
 	if(strcmp("exit", command->args[0]) == 0){
-		return false;
+		return 0;
 	}
 	if(strcmp("cd", command->args[0]) == 0){
 		if(command->argNum == 1){
@@ -77,7 +75,7 @@ bool runShellCommand(struct LashParser *parser, struct Command *command){
 		char buf[PATH_MAX];
 		printf("pwd: %s\n", getcwd(buf, PATH_MAX));
 	}
-	return true;
+	return 1;
 }
 
 
@@ -154,29 +152,29 @@ int runCommand(struct Command *command, int input){
 
 		if(!background){
 			int commandStatus;
-			acceptInterrupt = true;
+			acceptInterrupt = 1;
 			waitpid(runningPid, &commandStatus, 0);
-			acceptInterrupt = false;
+			acceptInterrupt = 0;
 		}
 	}
 	return pipeout ? fd[0] : -1;
 }
 
-bool inArray(char *needle, char*haystack[], int length){
+int inArray(char *needle, char*haystack[], int length){
 	int i;
 	for(i = 0; i < length; i++){
 		if(strcmp(needle, haystack[i]) == 0)
-			return true;
+			return 1;
 	}
-	return false;
+	return 0;
 }
 
-bool executeCommand(struct LashParser *parser){
+int executeCommand(struct LashParser *parser){
 	int i;
 	int nextinput = -1;
 	for(i = 0; i < parser->commandNum; i++){
 		struct Command *command = parser->commands[i];
-		bool shellCommand = inArray(command->args[0], inbuiltCommands, NUMINBUILTCOMMANDS);
+		int shellCommand = inArray(command->args[0], inbuiltCommands, NUMINBUILTCOMMANDS);
 		if(shellCommand){
 			return runShellCommand(parser, command);
 		}
@@ -184,7 +182,7 @@ bool executeCommand(struct LashParser *parser){
 			nextinput = runCommand(command, nextinput);
 		}
 	}
-	return true;
+	return 1;
 }
 
 void emptyArray(char **array, int length){
@@ -230,10 +228,10 @@ void runLash(int command, int args, int arglength, int promptlength){
 	//printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
 
 	// Loop forever. This will be broken if exit is run
-	bool cont = true;
+	int cont = 1;
 	int status;
     while(cont){
-		acceptInterrupt = false;
+		acceptInterrupt = 0;
 
         char *input = readline(prompt);
 		if(strcmp(input, "") != 0){

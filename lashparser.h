@@ -1,7 +1,7 @@
 #ifndef LASHPARSER_H_
 #define LASHPARSER_H_
 
-#include <stdbool.h>
+#include <stdint.h>
 
 #define PIPE 1
 #define REDIRECTBACKWARD 2
@@ -38,15 +38,15 @@ struct Command *newCommand(struct LashParser *parser);
 struct LashParser *newLashParser(int commands, int args, int arglength);
 void clearParser(struct LashParser *parser);
 
-bool atEnd(int index, char *line);
-bool atStart(int index, char *line);
+int atEnd(int index, char *line);
+int atStart(int index, char *line);
 void cleanString(struct LashParser *parser, char *line);
 int  copyString(char *copyTo, char *copyFrom, int startAt, int endAt);
 int  findQuoteLocations(char *line, int quotes[][3]);
-bool followedBySemiColonOrAmpersand(char *line, int index);
-bool indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex);
+int followedBySemiColonOrAmpersand(char *line, int index);
+int indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex);
 int  insideQuotes(int index, int quotes[][3], int numberOfQuotePairs);
-bool isEscaped(char *line, int index);
+int isEscaped(char *line, int index);
 int  parseCommand(struct LashParser *parser, struct Command *commData, int commandIndex);
 void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
 void sighandler(int signum);
