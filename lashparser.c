@@ -277,14 +277,14 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
     int i;
 	int argnum = 0;
     int copyIndex = 0;
-	int pipenum = 0;
-	int redirectnum = 0;
-	int pipeIndexes[parser->maxargs];
-	int redirectIndexes[parser->maxargs][2];
+	//int pipenum;
+	//int redirectnum;
+	//int pipeIndexes[parser->maxargs];
+	//int redirectIndexes[parser->maxargs][2];
 	int captureRedirect = 0;
     char currentChar;
-	pipenum = findPipes(parser, command, pipeIndexes);
-	redirectnum = findRedirects(parser, command, redirectIndexes);
+	//pipenum = findPipes(parser, command, pipeIndexes);
+	//redirectnum = findRedirects(parser, command, redirectIndexes);
 	//printf("redirects: %d\npipes: %d\n", redirectnum, pipenum);
 	//printf("command: %s\n", command);
     for(i = 0; i < strlen(command); i++){
