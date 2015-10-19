@@ -10,6 +10,6 @@ void sighandler(int signum);
 void runLash();
 bool runShellCommand(struct LashParser *parser, struct Command *command);
 int runCommand(struct Command *command, int input);
-
+bool inArray(char *needle, char *haystack[], int length);
 
 #endif

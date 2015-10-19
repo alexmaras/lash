@@ -13,10 +13,12 @@
 #include <readline/history.h>
 #include <linux/limits.h>
 
+#define NUMINBUILTCOMMANDS 4
+#define MAXPROMPT 40
+
 #include "lashparser.h"
 #include "lash.h"
 
-#define MAXPROMPT 40
 
 pid_t runningPid;
 bool acceptInterrupt;
@@ -26,6 +28,13 @@ static int maxcommands;
 static int maxargs;
 static int maxarglength;
 static int maxpromptlength;
+
+static char *inbuiltCommands[] = {
+	"cd",
+	"exit",
+	"prompt",
+	"pwd"
+};
 
 bool runShellCommand(struct LashParser *parser, struct Command *command){
 	if(strcmp("exit", command->args[0]) == 0){
@@ -63,6 +72,10 @@ bool runShellCommand(struct LashParser *parser, struct Command *command){
 				strcat(prompt, " ");
 			}
 		}
+	}
+	if(strcmp("pwd", command->args[0]) == 0){
+		char buf[PATH_MAX];
+		printf("pwd: %s\n", getcwd(buf, PATH_MAX));
 	}
 	return true;
 }
@@ -149,12 +162,21 @@ int runCommand(struct Command *command, int input){
 	return pipeout ? fd[0] : -1;
 }
 
+bool inArray(char *needle, char*haystack[], int length){
+	int i;
+	for(i = 0; i < length; i++){
+		if(strcmp(needle, haystack[i]) == 0)
+			return true;
+	}
+	return false;
+}
+
 bool executeCommand(struct LashParser *parser){
 	int i;
 	int nextinput = -1;
 	for(i = 0; i < parser->commandNum; i++){
 		struct Command *command = parser->commands[i];
-		bool shellCommand = (strcmp("exit", command->args[0]) == 0 || strcmp("cd", command->args[0]) == 0 || strcmp("prompt", command->args[0]) == 0);
+		bool shellCommand = inArray(command->args[0], inbuiltCommands, NUMINBUILTCOMMANDS);
 		if(shellCommand){
 			return runShellCommand(parser, command);
 		}
