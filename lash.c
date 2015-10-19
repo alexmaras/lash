@@ -99,7 +99,7 @@ int runCommand(struct Command *command, int input){
 	}
 	if(command->redirectIn != NULL){
 		redirectIn = open(command->redirectIn, O_RDONLY);
-		if(redirectOut == -1){
+		if(redirectIn == -1){
 			printf("File Error: %s\n", strerror(errno));
 			return -1;
 		}

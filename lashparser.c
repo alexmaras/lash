@@ -157,6 +157,7 @@ void cleanString(struct LashParser *parser, char *line){
 
 	for(i = 0; i<length; i++){
 		if( insideQuotes(i, quotes, numberOfQuotePairs) ||
+			isEscaped(line, i) ||
             (
                 !(line[i] == ';' &&
                     (
@@ -175,9 +176,9 @@ void cleanString(struct LashParser *parser, char *line){
 						(line[i+1] == '|') ||
 						(line[i+1] == '<') ||
 						(line[i+1] == '>') ||
-						(line[i-1] == '|') ||
-						(line[i-1] == '<') ||
-						(line[i-1] == '>') ||
+						(line[i-1] == '|' && !isEscaped(line, i-1)) ||
+						(line[i-1] == '<' && !isEscaped(line, i-1)) ||
+						(line[i-1] == '>' && !isEscaped(line, i-1)) ||
 				        (j == 0) 				// first character of the new string
 			        )
                 )
@@ -278,6 +279,7 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(command, quotes);
 
+
     int i;
 	int argnum = 0;
     int copyIndex = 0;
@@ -338,7 +340,6 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 int splitCommands(struct LashParser *parser, char *line){
 
 	cleanString(parser, line);
-
 	int quotes[parser->maxcommands][3];
 	int numberOfQuotePairs = findQuoteLocations(line, quotes);
 
