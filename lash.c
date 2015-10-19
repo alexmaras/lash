@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -68,23 +70,45 @@ bool runShellCommand(struct LashParser *parser, struct Command *command){
 
 int runCommand(struct Command *command, int input){
 	int fd[2];
-	fd[0] = STDIN_FILENO;
-	fd[1] = STDOUT_FILENO;
+	int redirectOut = -1;
+	int redirectIn = -1;
+	int pipeout = 0;
+
+
+	if(command->redirectOut != NULL){
+		redirectOut = creat(command->redirectOut, 0644);
+	}
+	if(command->redirectIn != NULL){
+		redirectIn = open(command->redirectIn, O_RDONLY);
+	}
 	if(command->symbolAfter == '|'){
+		pipeout = 1;
 		pipe(fd);
 	}
+
 	runningPid = fork();
-	if(runningPid == -1){
-		printf("for error: %s\n", strerror(errno));
+	if(runningPid < 0){
+		printf("Fork error: %s\n", strerror(errno));
 	}
 	else if(runningPid == 0){
 		// child process
-
-		if(fd[1] != STDOUT_FILENO){
-			dup2(fd[1], STDOUT_FILENO);
+		// redirect takes precendence
+		if(redirectOut != -1){
+			dup2(redirectOut, STDOUT_FILENO);
+			close(redirectOut);
 		}
-		if(input != STDIN_FILENO){
+		else if(pipeout){
+			dup2(fd[1], STDOUT_FILENO);
+			close(fd[1]);
+		}
+
+		if(redirectIn != -1){
+			dup2(redirectIn, STDIN_FILENO);
+			close(redirectIn);
+		}
+		else if(input != -1){
 			dup2(input, STDIN_FILENO);
+			close(input);
 		}
 
 		execvp(command->args[0], command->args);
@@ -92,23 +116,23 @@ int runCommand(struct Command *command, int input){
 		printf("LaSH: %s: %s\n", command->args[0], error);
 		exit(1);
 	} else {
-		if(fd[1] != STDOUT_FILENO)
+		if(pipeout)
 			close(fd[1]);
-		// parent process
+		close(redirectOut);
+		close(redirectIn);
+		close(input);
+
 		int commandStatus;
 		acceptInterrupt = true;
 		waitpid(runningPid, &commandStatus, 0);
 		acceptInterrupt = false;
-		if(input != STDIN_FILENO){
-			close(input);
-		}
 	}
-	return fd[0];
+	return pipeout ? fd[0] : -1;
 }
 
 bool executeCommand(struct LashParser *parser){
 	int i;
-	int nextinput = 0;
+	int nextinput = -1;
 	for(i = 0; i < parser->commandNum; i++){
 		struct Command *command = parser->commands[i];
 		bool shellCommand = (strcmp("exit", command->args[0]) == 0 || strcmp("cd", command->args[0]) == 0 || strcmp("prompt", command->args[0]) == 0);
