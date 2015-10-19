@@ -1,0 +1,2 @@
+lashmake: lash.c
+	gcc testparser.c lashparser.c -o bin/testparser -Wall -lreadline

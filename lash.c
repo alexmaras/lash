@@ -4,20 +4,22 @@
 #include <string.h>
 #include <signal.h>
 #include <errno.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <stdbool.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <linux/limits.h>
 
+#define NUMINBUILTCOMMANDS 4
+#define MAXPROMPT 40
+
 #include "lashparser.h"
 #include "lash.h"
 
-#define MAXPROMPT 40
 
 pid_t runningPid;
-bool acceptInterrupt;
+int acceptInterrupt;
 char prompt[MAXPROMPT];
 
 static int maxcommands;
@@ -25,26 +27,23 @@ static int maxargs;
 static int maxarglength;
 static int maxpromptlength;
 
-bool runShellCommand(struct LashParser *parser, struct Command *command){
+static char *inbuiltCommands[] = {
+	"cd",
+	"exit",
+	"prompt",
+	"pwd"
+};
+
+int runShellCommand(struct LashParser *parser, struct Command *command){
 	if(strcmp("exit", command->args[0]) == 0){
-		return false;
+		return 0;
 	}
 	if(strcmp("cd", command->args[0]) == 0){
 		if(command->argNum == 1){
 			chdir(getenv("HOME"));
 		} else {
-			char *path = malloc(parser->maxinput);
-			strcpy(path, command->args[1]);
-			if(command->args[1][0] == '~'){
-				strcpy(path, getenv("HOME"));
-				char *buffer = malloc(sizeof(char) * parser->maxinput);
-				memcpy(buffer, &(command->args[1][1]), strlen(command->args[1])-1);
-				strcat(path, buffer);
-				free(buffer);
-			}
-			int status = chdir(path);
+			int status = chdir(command->args[1]);
 			char *error = strerror(errno);
-			free(path);
 			if(status == -1)
 				printf("%s\n", error);
 		}
@@ -62,29 +61,72 @@ bool runShellCommand(struct LashParser *parser, struct Command *command){
 			}
 		}
 	}
-	return true;
+	if(strcmp("pwd", command->args[0]) == 0){
+		char buf[PATH_MAX];
+		printf("pwd: %s\n", getcwd(buf, PATH_MAX));
+	}
+	return 1;
 }
 
 
 int runCommand(struct Command *command, int input){
 	int fd[2];
-	fd[0] = STDIN_FILENO;
-	fd[1] = STDOUT_FILENO;
+	int redirectOut = -1;
+	int redirectIn = -1;
+	int pipeout = 0;
+	int background = 0;
+
+
+	//-------------------------------------------------
+	//   Evaluate the redirects and pipes
+	//-------------------------------------------------
+	if(command->redirectOut != NULL){
+		redirectOut = creat(command->redirectOut, 0644);
+		if(redirectOut == -1){
+			printf("File Error: %s\n", strerror(errno));
+			return -1;
+		}
+	}
+	if(command->redirectIn != NULL){
+		redirectIn = open(command->redirectIn, O_RDONLY);
+		if(redirectIn == -1){
+			printf("File Error: %s\n", strerror(errno));
+			return -1;
+		}
+	}
 	if(command->symbolAfter == '|'){
+		pipeout = 1;
 		pipe(fd);
 	}
+	if(command->symbolAfter == '&'){
+		background = 1;
+	}
+	//------------------------------------------------ END
+
+
 	runningPid = fork();
-	if(runningPid == -1){
-		printf("for error: %s\n", strerror(errno));
+	if(runningPid < 0){
+		printf("Fork error: %s\n", strerror(errno));
 	}
 	else if(runningPid == 0){
 		// child process
-
-		if(fd[1] != STDOUT_FILENO){
-			dup2(fd[1], STDOUT_FILENO);
+		// redirect takes precendence
+		if(redirectOut != -1){
+			dup2(redirectOut, STDOUT_FILENO);
+			close(redirectOut);
 		}
-		if(input != STDIN_FILENO){
+		else if(pipeout){
+			dup2(fd[1], STDOUT_FILENO);
+			close(fd[1]);
+		}
+
+		if(redirectIn != -1){
+			dup2(redirectIn, STDIN_FILENO);
+			close(redirectIn);
+		}
+		else if(input != -1){
 			dup2(input, STDIN_FILENO);
+			close(input);
 		}
 
 		execvp(command->args[0], command->args);
@@ -92,26 +134,37 @@ int runCommand(struct Command *command, int input){
 		printf("LaSH: %s: %s\n", command->args[0], error);
 		exit(1);
 	} else {
-		if(fd[1] != STDOUT_FILENO)
+		if(pipeout)
 			close(fd[1]);
-		// parent process
-		int commandStatus;
-		acceptInterrupt = true;
-		waitpid(runningPid, &commandStatus, 0);
-		acceptInterrupt = false;
-		if(input != STDIN_FILENO){
-			close(input);
+		close(redirectOut);
+		close(redirectIn);
+		close(input);
+
+		if(!background){
+			int commandStatus;
+			acceptInterrupt = 1;
+			waitpid(runningPid, &commandStatus, 0);
+			acceptInterrupt = 0;
 		}
 	}
-	return fd[0];
+	return pipeout ? fd[0] : -1;
 }
 
-bool executeCommand(struct LashParser *parser){
+int inArray(char *needle, char*haystack[], int length){
 	int i;
-	int nextinput = 0;
+	for(i = 0; i < length; i++){
+		if(strcmp(needle, haystack[i]) == 0)
+			return 1;
+	}
+	return 0;
+}
+
+int executeCommand(struct LashParser *parser){
+	int i;
+	int nextinput = -1;
 	for(i = 0; i < parser->commandNum; i++){
 		struct Command *command = parser->commands[i];
-		bool shellCommand = (strcmp("exit", command->args[0]) == 0 || strcmp("cd", command->args[0]) == 0 || strcmp("prompt", command->args[0]) == 0);
+		int shellCommand = inArray(command->args[0], inbuiltCommands, NUMINBUILTCOMMANDS);
 		if(shellCommand){
 			return runShellCommand(parser, command);
 		}
@@ -119,7 +172,7 @@ bool executeCommand(struct LashParser *parser){
 			nextinput = runCommand(command, nextinput);
 		}
 	}
-	return true;
+	return 1;
 }
 
 void emptyArray(char **array, int length){
@@ -165,10 +218,10 @@ void runLash(int command, int args, int arglength, int promptlength){
 	//printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
 
 	// Loop forever. This will be broken if exit is run
-	bool cont = true;
+	int cont = 1;
 	int status;
     while(cont){
-		acceptInterrupt = false;
+		acceptInterrupt = 0;
 
         char *input = readline(prompt);
 		if(strcmp(input, "") != 0){

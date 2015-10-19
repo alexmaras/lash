@@ -1,22 +1,16 @@
 #ifndef LASHPARSER_H_
 #define LASHPARSER_H_
 
-#include <stdbool.h>
-
-#define PIPE 1
-#define REDIRECTBACKWARD 2
-#define REDIRECTFORWARD 3
+#include <glob.h>
 
 #define QUOTE_MISMATCH -1
 #define VALID 1
 #define NO_ARGS 0
 
-
 struct Command{
 	char *command;
 	char **args;
 	char symbolAfter;
-
 	char *redirectIn;
 	char *redirectOut;
 	int argNum;
@@ -27,33 +21,35 @@ struct LashParser {
 	int maxargs;
 	int maxarglength;
 	int maxinput;
-
 	struct Command **commands;
-
-
 	int commandNum;
 };
 
-struct Command *newCommand(struct LashParser *parser);
+// struct construction and destruction functions
+struct Command    *newCommand(struct LashParser *parser);
 struct LashParser *newLashParser(int commands, int args, int arglength);
-void clearParser(struct LashParser *parser);
+void   clearParser(struct LashParser *parser);
 
-bool atEnd(int index, char *line);
-bool atStart(int index, char *line);
+// command building and parsing functions
+int buildCommand (struct LashParser *parser, char *line);
+int splitCommands(struct LashParser *parser, char *line);
+int parseCommand (struct LashParser *parser, struct Command *commData, int commandIndex);
+
+// string check functions
+int atEnd(const int index, const char *line);
+int atStart(const int index, const char *line);
+int isEscaped(const char *line, const int index);
+int insideQuotes(const int index, int quotes[][3], const int numberOfQuotePairs);
+int indexNotInArray(int array[][3], const int arrayIndex, const int foundCharIndex);
+int findQuoteLocations(const char *line, int quotes[][3]);
+int followedBySemiColonOrAmpersand(const char *line, const int index);
+
+// string cleanup/manipulation functions
+int  copyString(char *copyTo, const char *copyFrom, int startAt, const int endAt);
 void cleanString(struct LashParser *parser, char *line);
-int  copyString(char *copyTo, char *copyFrom, int startAt, int endAt);
-int  findQuoteLocations(char *line, int quotes[][3]);
-bool followedBySemiColon(char *line, int index);
-bool indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex);
-int  insideQuotes(int index, int quotes[][3], int numberOfQuotePairs);
-bool isEscaped(char *line, int index);
-int  parseCommand(struct LashParser *parser, struct Command *commData, int commandIndex);
+void replaceTilde(struct LashParser *parser, char *line);
+glob_t * expandWildcards(struct LashParser *parser, char *line);
 void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
-void sighandler(int signum);
-int  splitCommands(struct LashParser *parser, char *line);
-void stripStartAndEndSpacesAndSemiColons(char *line);
-int  findPipes(struct LashParser *parser, char *line, int *pipeIndexes);
-int  findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2]);
-int foundPipeOrRedirect(int index, int *pipes, int pipenum, int redirects[][2], int redirectnum);
-int buildCommand(struct LashParser *parser, char *line);
+void stripStartAndEndSpacesAndEndingSymbols(char *line);
+
 #endif
