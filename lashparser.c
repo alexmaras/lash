@@ -1,7 +1,5 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdint.h>
 
 #include "lashparser.h"
 
@@ -49,7 +47,7 @@ void clearParser(struct LashParser *parser){
 
 }
 
-int isEscaped(char *line, int index){
+int isEscaped(const char *line, const int index){
 	if(index == 0)
 		return 0;
     if(line[index-1] == '\\' && !isEscaped(line, index-1)){
@@ -58,7 +56,7 @@ int isEscaped(char *line, int index){
     return 0;
 }
 
-int followedBySemiColonOrAmpersand(char *line, int index){
+int followedBySemiColonOrAmpersand(const char *line, const int index){
     int i = index+1;
     while(line[i] == ' '){
         i++;
@@ -70,7 +68,7 @@ int followedBySemiColonOrAmpersand(char *line, int index){
     return 0;
 }
 
-int insideQuotes(int index, int quotes[][3], int numberOfQuotePairs){
+int insideQuotes(const int index, int quotes[][3], const int numberOfQuotePairs){
     int i;
     for(i = 0; i < numberOfQuotePairs; i++){
         if(quotes[i][0] < index && index < quotes[i][1]){
@@ -80,7 +78,7 @@ int insideQuotes(int index, int quotes[][3], int numberOfQuotePairs){
     return 0;
 }
 
-int atStart(int index, char *line){
+int atStart(const int index, const char *line){
     int ending = 0;
     int i;
 
@@ -93,7 +91,7 @@ int atStart(int index, char *line){
 }
 
 
-int atEnd(int index, char *line){
+int atEnd(const int index, const char *line){
     int ending = strlen(line);
     int i;
 
@@ -262,7 +260,7 @@ void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line){
 	free(tempString);
 }
 
-int copyString(char *copyTo, char *copyFrom, int startAt, int endAt){
+int copyString(char *copyTo, const char *copyFrom, int startAt, const int endAt){
 	int i = 0;
 	while(startAt < endAt){
 		copyTo[i] = copyFrom[startAt];
@@ -283,16 +281,8 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
     int i;
 	int argnum = 0;
     int copyIndex = 0;
-	int pipenum = 0;
-	int redirectnum = 0;
-	int pipeIndexes[parser->maxargs];
-	int redirectIndexes[parser->maxargs][2];
 	int captureRedirect = 0;
     char currentChar;
-	pipenum = findPipes(parser, command, pipeIndexes);
-	redirectnum = findRedirects(parser, command, redirectIndexes);
-	//printf("redirects: %d\npipes: %d\n", redirectnum, pipenum);
-	//printf("command: %s\n", command);
     for(i = 0; i < strlen(command); i++){
 		currentChar = command[i];
         int lastChar = (i == strlen(command)-1);
@@ -345,23 +335,6 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 	return argnum;
 }
 
-int foundPipeOrRedirect(int index, int *pipes, int pipenum, int redirects[][2], int redirectnum){
-	int i;
-	for(i = 0; i < pipenum; i++){
-		if(pipes[i] == index){
-			return PIPE;
-		}
-	}
-
-	for(i = 0; i < redirectnum; i++){
-		if(redirects[i][0] == index){
-			return redirects[i][1]; // WILL RETURN REDIRECTBACKWARD IF BACKWARD, REDIRECTFORWARD IF FORWARD
-		}
-	}
-
-	return 0;
-}
-
 int splitCommands(struct LashParser *parser, char *line){
 
 	cleanString(parser, line);
@@ -397,41 +370,7 @@ int splitCommands(struct LashParser *parser, char *line){
 	parser->commandNum = commandnum;
 	return commandnum;
 }
-
-int findPipes(struct LashParser *parser, char *line, int *pipeIndexes){
-
-    int quotes[parser->maxcommands][3];
-    int numberOfQuotePairs = findQuoteLocations(line, quotes);
-
-	int i;
-	int j = 0;
-	for(i = 0; i < strlen(line); i++){
-		if(line[i] == '|' && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs)){
-			pipeIndexes[j] = i;
-			j++;
-		}
-	}
-	return j;
-}
-
-int findRedirects(struct LashParser *parser, char *line, int redirectIndexes[][2]){
-
-    int quotes[parser->maxcommands][3];
-    int numberOfQuotePairs = findQuoteLocations(line, quotes);
-
-    int i;
-    int j = 0;
-    for(i = 0; i < strlen(line); i++){
-        if((line[i] == '<' || line[i] == '>') && !isEscaped(line, i) && !insideQuotes(i, quotes, numberOfQuotePairs)){
-			redirectIndexes[j][0] = i;
-			redirectIndexes[j][1] = (line[i] == '<' ? REDIRECTBACKWARD : REDIRECTFORWARD);
-            j++;
-        }
-    }
-    return j;
-}
-
-int indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex){
+int indexNotInArray(int array[][3], const int arrayIndex, const int foundCharIndex){
     int index;
     for(index = 0; index < arrayIndex; index++){
         if(array[index][0] == foundCharIndex || array[index][1] == foundCharIndex){
@@ -441,7 +380,7 @@ int indexNotInArray(int array[][3], int arrayIndex, int foundCharIndex){
     return 1;
 }
 
-int findQuoteLocations(char *line, int quotes[][3]){
+int findQuoteLocations(const char *line, int quotes[][3]){
     int index, secondIndex, quoteIndex = 0;
     char currentChar = ' ';
     int linelength = strlen(line);
