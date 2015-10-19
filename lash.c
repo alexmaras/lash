@@ -73,7 +73,7 @@ int runCommand(struct Command *command, int input){
 	int redirectOut = -1;
 	int redirectIn = -1;
 	int pipeout = 0;
-
+	int background = 0;
 
 	if(command->redirectOut != NULL){
 		redirectOut = creat(command->redirectOut, 0644);
@@ -85,7 +85,9 @@ int runCommand(struct Command *command, int input){
 		pipeout = 1;
 		pipe(fd);
 	}
-
+	if(command->symbolAfter == '&'){
+		background = 1;
+	}
 	runningPid = fork();
 	if(runningPid < 0){
 		printf("Fork error: %s\n", strerror(errno));
@@ -122,10 +124,12 @@ int runCommand(struct Command *command, int input){
 		close(redirectIn);
 		close(input);
 
-		int commandStatus;
-		acceptInterrupt = true;
-		waitpid(runningPid, &commandStatus, 0);
-		acceptInterrupt = false;
+		if(!background){
+			int commandStatus;
+			acceptInterrupt = true;
+			waitpid(runningPid, &commandStatus, 0);
+			acceptInterrupt = false;
+		}
 	}
 	return pipeout ? fd[0] : -1;
 }
