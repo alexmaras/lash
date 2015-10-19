@@ -81,9 +81,17 @@ int runCommand(struct Command *command, int input){
 	//-------------------------------------------------
 	if(command->redirectOut != NULL){
 		redirectOut = creat(command->redirectOut, 0644);
+		if(redirectOut == -1){
+			printf("File Error: %s\n", strerror(errno));
+			return -1;
+		}
 	}
 	if(command->redirectIn != NULL){
 		redirectIn = open(command->redirectIn, O_RDONLY);
+		if(redirectOut == -1){
+			printf("File Error: %s\n", strerror(errno));
+			return -1;
+		}
 	}
 	if(command->symbolAfter == '|'){
 		pipeout = 1;
