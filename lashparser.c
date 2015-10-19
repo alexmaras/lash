@@ -2,7 +2,7 @@
 #include <string.h>
 #include <glob.h>
 
-//#include <stdio.h>
+#include <stdio.h>
 
 #include "lashparser.h"
 
@@ -47,6 +47,7 @@ void clearParser(struct LashParser *parser){
 		}
 		free(parser->commands[i]);
 	}
+	parser->commandNum = 0;
 
 }
 
