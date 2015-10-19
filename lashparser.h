@@ -45,6 +45,7 @@ int followedBySemiColonOrAmpersand(const char *line, const int index);
 // string cleanup/manipulation functions
 int  copyString(char *copyTo, const char *copyFrom, int startAt, const int endAt);
 void cleanString(struct LashParser *parser, char *line);
+void replaceTilde(struct LashParser *parser, char *line);
 void removeEscapeSlashesAndQuotes(struct LashParser *parser, char *line);
 void stripStartAndEndSpacesAndEndingSymbols(char *line);
 

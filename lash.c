@@ -42,18 +42,8 @@ int runShellCommand(struct LashParser *parser, struct Command *command){
 		if(command->argNum == 1){
 			chdir(getenv("HOME"));
 		} else {
-			char *path = malloc(parser->maxinput);
-			strcpy(path, command->args[1]);
-			if(command->args[1][0] == '~'){
-				strcpy(path, getenv("HOME"));
-				char *buffer = malloc(sizeof(char) * parser->maxinput);
-				memcpy(buffer, &(command->args[1][1]), strlen(command->args[1])-1);
-				strcat(path, buffer);
-				free(buffer);
-			}
-			int status = chdir(path);
+			int status = chdir(command->args[1]);
 			char *error = strerror(errno);
-			free(path);
 			if(status == -1)
 				printf("%s\n", error);
 		}

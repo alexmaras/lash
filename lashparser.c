@@ -272,6 +272,18 @@ int copyString(char *copyTo, const char *copyFrom, int startAt, const int endAt)
 	return startAt+1;
 }
 
+void replaceTilde(struct LashParser *parser, char *line){
+	char *tempString = malloc(sizeof(char) * parser->maxinput);
+	if(line[0] == '~'){
+		strcpy(tempString, getenv("HOME"));
+		char *buffer = malloc(sizeof(char) * parser->maxinput);
+		memcpy(buffer, &(line[1]), strlen(line)-1);
+		strcat(tempString, buffer);
+		free(buffer);
+		strcpy(line, tempString);
+	}
+	free(tempString);
+}
 
 int parseCommand(struct LashParser *parser, struct Command *commData, int commandIndex){
 	char *command = commData->command;
@@ -306,6 +318,7 @@ int parseCommand(struct LashParser *parser, struct Command *commData, int comman
 			copyIndex = copyString(tempString, command, copyIndex, ( lastChar ? i+1 : i));
 			stripStartAndEndSpacesAndEndingSymbols(tempString);
 			removeEscapeSlashesAndQuotes(parser, tempString);
+			replaceTilde(parser, tempString);
 
 			if(captureRedirect == 1){
 				if(commData->redirectIn != NULL)
