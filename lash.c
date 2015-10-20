@@ -34,6 +34,22 @@ static char *inbuiltCommands[] = {
 	"pwd"
 };
 
+/**
+ * Runs shell specific commands.
+ * The following commands are acceptable:
+ *    - exit
+ *    - cd
+ *    - prompt
+ *    - pwd
+ * Note that given the commands "exit" and "pwd", any arguments after the first
+ * are completely ignored.
+ * Given the commands "prompt" and "cd", only the first argument after the command
+ * itself will be considered and any later arguments discarded
+ *
+ * @param  parser  A pointer to an initialiased LashParser struct
+ * @param  command A pointer to an initialiased and populated command struct
+ * @return         0 if the command was exit, -1 if there was an error, 1 if the command was executed successfully
+ */
 int runShellCommand(struct LashParser *parser, struct Command *command){
 	if(strcmp("exit", command->args[0]) == 0){
 		return 0;
@@ -69,6 +85,16 @@ int runShellCommand(struct LashParser *parser, struct Command *command){
 }
 
 
+/**
+ * Runs commands that are not shell specific.
+ * This takes a command struct which should be fully populated
+ * and an integer. The input integer is used internally to specify the input file descriptor
+ * for the process - i.e. which file descriptor to read from, if any.
+ * If a file specifier is not going to be specified, the input should be set to -1
+ * @param  command A pointer to an initialiased and populated command struct
+ * @param  input   An integer which represents a file descriptor
+ * @return         The input file descriptor for the next command if this command contained a pipe
+ */
 int runCommand(struct Command *command, int input){
 	int fd[2];
 	int redirectOut = -1;
@@ -111,6 +137,9 @@ int runCommand(struct Command *command, int input){
 	else if(runningPid == 0){
 		// child process
 		// redirect takes precendence
+		// -----------------------------------------------
+		//  Setting up file descriptors
+		//  ----------------------------------------------
 		if(redirectOut != -1){
 			dup2(redirectOut, STDOUT_FILENO);
 			close(redirectOut);
@@ -128,8 +157,11 @@ int runCommand(struct Command *command, int input){
 			dup2(input, STDIN_FILENO);
 			close(input);
 		}
+		//------------------------------------------------ END
 
+		// Execute the command
 		execvp(command->args[0], command->args);
+
 		char* error = strerror(errno);
 		printf("LaSH: %s: %s\n", command->args[0], error);
 		exit(1);
@@ -150,6 +182,14 @@ int runCommand(struct Command *command, int input){
 	return pipeout ? fd[0] : -1;
 }
 
+/**
+ * Checks whether the given string is represented verbatim in the given array of
+ * strings. The length parameter is the amount of string stored in the haystack.
+ * @param  needle   The string to search for
+ * @param  haystack The array of string to search within
+ * @param  length   The length of the haystack
+ * @return          1 if found, 0 if not
+ */
 int inArray(char *needle, char*haystack[], int length){
 	int i;
 	for(i = 0; i < length; i++){
@@ -159,6 +199,12 @@ int inArray(char *needle, char*haystack[], int length){
 	return 0;
 }
 
+/**
+ * Evaluates each command stored in the parser struct and exeutes either the runShellCommand
+ * function or the runCommand function.
+ * @param  parser A constructed LashParser struct with fully populated commands
+ * @return        0 if a command was "exit", 1 otherwise
+ */
 int executeCommand(struct LashParser *parser){
 	int i;
 	int nextinput = -1;
@@ -175,14 +221,11 @@ int executeCommand(struct LashParser *parser){
 	return 1;
 }
 
-void emptyArray(char **array, int length){
-	int delete = 0;
-	for(delete = 0; delete < length; delete++){
-		free(array[delete]);
-		array[delete] = NULL;
-	}
-}
-
+/**
+ * Handles the signals to programs. Currently functions only for SIGINTS when
+ * a program is being executed
+ * @param signum The signal number
+ */
 void sighandler(int signum){
     if(signum == SIGINT){
 		if(acceptInterrupt)
@@ -192,7 +235,15 @@ void sighandler(int signum){
 	rl_cleanup_after_signal();
 }
 
-
+/**
+ * Runs the lash program. The given parameters allow the user to specify the
+ * limits the program should operate within.
+ *
+ * @param command      The maximum amount of commands to allow
+ * @param args         The maximum number of arguments within each command
+ * @param arglength    The maximum length of each argument
+ * @param promptlength The maximum length of the prompt on the command line
+ */
 void runLash(int command, int args, int arglength, int promptlength){
 
 	maxcommands     = command;
@@ -208,14 +259,11 @@ void runLash(int command, int args, int arglength, int promptlength){
    	signal (SIGTSTP, SIG_IGN);
    	signal (SIGTTIN, SIG_IGN);
    	signal (SIGTTOU, SIG_IGN);
-   	signal (SIGCHLD, SIG_IGN);
+ //   	signal (SIGCHLD, sighandler);
 
 	stifle_history(100);
 
 	struct LashParser *lash = newLashParser(maxcommands, maxargs, maxarglength);
-
-
-	//printf("defines: %d, %d, %d\n", PIPE, REDIRECTBACKWARD, REDIRECTFORWARD);
 
 	// Loop forever. This will be broken if exit is run
 	int cont = 1;

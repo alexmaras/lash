@@ -3,7 +3,6 @@
 
 #include "lashparser.h"
 
-void emptyArray(char **array, int length);
 int executeCommand(struct LashParser *parser);
 void sighandler(int signum);
 void runLash();
