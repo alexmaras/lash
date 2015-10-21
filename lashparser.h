@@ -32,8 +32,8 @@ void   clearParser(struct LashParser *parser);
 
 // command building and parsing functions
 int buildCommand (struct LashParser *parser, char *line);
-int splitCommands(struct LashParser *parser, char *line);
-int parseCommand (struct LashParser *parser, struct Command *commData, int commandIndex);
+void splitCommands(struct LashParser *parser, char *line);
+void parseCommand (struct LashParser *parser, struct Command *commData, int commandIndex);
 
 // string check functions
 int atEnd(const int index, const char *line);

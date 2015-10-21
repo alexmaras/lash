@@ -9,6 +9,6 @@
 #define MAXPROMPT 40
 
 int main(void){
-	runLash(MAXCOMMANDS, MAXARGS, MAXARGLENGTH, MAXPROMPT);
+    runLash(MAXCOMMANDS, MAXARGS, MAXARGLENGTH, MAXPROMPT);
     exit(0);
 }
